@@ -31,18 +31,15 @@ permissions:
 jobs:
   manage:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup tracker runtime
+        uses: ./.github/actions/setup-tracker
         with:
-          node-version: 22
-          cache: npm
-
-      - name: Installer les dependances
-        run: npm ci
+          cache-key: ${{ runner.os }}-node22-node-modules-${{ hashFiles('package-lock.json') }}
 
       - name: Valider les entrees add/remove/rename
         if: ${{ inputs.action != 'list' }}

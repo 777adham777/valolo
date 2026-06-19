@@ -16,18 +16,15 @@ concurrency:
 jobs:
   leaderboard:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup tracker runtime
+        uses: ./.github/actions/setup-tracker
         with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+          cache-key: ${{ runner.os }}-node22-node-modules-${{ hashFiles('package-lock.json') }}
 
       - name: Envoyer le classement
         run: npm run tracker:leaderboard

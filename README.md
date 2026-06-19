@@ -110,6 +110,8 @@ References officielles :
 - `.github/workflows/health.yml`
   Verifie chaque jour la connexion Turso, HenrikDev et Discord webhook sans poster de message.
 
+Les workflows utilisent `.github/actions/setup-tracker` pour restaurer `node_modules` depuis le cache GitHub Actions et ne lancent `npm ci` que quand `package-lock.json` change.
+
 ### Gerer les joueurs sans ton PC
 
 Apres le push du repo :
