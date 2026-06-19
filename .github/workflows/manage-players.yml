@@ -1,10 +1,10 @@
-name: Manage Tracked Players
+name: Gerer Les Joueurs Suivis
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Command to run"
+        description: "Commande a executer"
         required: true
         type: choice
         options:
@@ -12,15 +12,15 @@ on:
           - remove
           - list
       riot_id:
-        description: "Riot ID, for example TenZ#NA1"
+        description: "Riot ID, par exemple TenZ#NA1"
         required: false
         type: string
       region:
-        description: "Region: ap, br, eu, kr, latam, na"
+        description: "Region : ap, br, eu, kr, latam, na"
         required: false
         type: string
       display_name:
-        description: "Optional display name when adding"
+        description: "Nom affiche optionnel a l'ajout"
         required: false
         type: string
 
@@ -40,10 +40,10 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Installer les dependances
         run: npm ci
 
-      - name: Validate add/remove inputs
+      - name: Valider les entrees add/remove
         if: ${{ inputs.action != 'list' }}
         shell: bash
         run: |
@@ -52,7 +52,7 @@ jobs:
             exit 1
           fi
 
-      - name: Add player
+      - name: Ajouter un joueur
         if: ${{ inputs.action == 'add' }}
         run: npm run tracker:add-player -- "${{ inputs.riot_id }}" "${{ inputs.region }}" "${{ inputs.display_name }}"
         env:
@@ -62,7 +62,7 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           LEADERBOARD_TIMEZONE: Europe/Paris
 
-      - name: Remove player
+      - name: Retirer un joueur
         if: ${{ inputs.action == 'remove' }}
         run: npm run tracker:remove-player -- "${{ inputs.riot_id }}" "${{ inputs.region }}"
         env:
@@ -72,7 +72,7 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           LEADERBOARD_TIMEZONE: Europe/Paris
 
-      - name: List players
+      - name: Lister les joueurs
         if: ${{ inputs.action == 'list' }}
         run: npm run tracker:list-players
         env:

@@ -39,7 +39,7 @@ export class TrackerService {
   public async removePlayer(riotId: string, region: Region): Promise<boolean> {
     const [gameName, tagLine] = riotId.split("#");
     if (!gameName || !tagLine) {
-      throw new Error(`Invalid Riot ID "${riotId}". Expected "<name>#<tag>"`);
+      throw new Error(`Riot ID invalide "${riotId}". Format attendu : "<nom>#<tag>"`);
     }
 
     return this.store.removeTrackedPlayer(gameName, tagLine, region);
@@ -52,7 +52,7 @@ export class TrackerService {
     for (const player of players) {
       const state = await this.store.getPlayerState(player.id);
       const label = player.displayName ?? `${player.gameName}#${player.tagLine}`;
-      const rank = state.rankName ? `${state.rankName}${state.rankingInTier !== null ? ` (${state.rankingInTier} RR)` : ""}` : "Unranked";
+      const rank = state.rankName ? `${state.rankName}${state.rankingInTier !== null ? ` (${state.rankingInTier} RR)` : ""}` : "Non classe";
       lines.push(`${label} [${player.region}] - ${rank}`);
     }
 
@@ -86,6 +86,49 @@ export class TrackerService {
       posted: true,
       failures: syncResult.failures
     };
+  }
+
+  public async postLatestTrackedMatch(): Promise<{
+    posted: boolean;
+    failures: string[];
+  }> {
+    const players = await this.store.listTrackedPlayers();
+    const failures: string[] = [];
+    let latestCandidate: {
+      player: Awaited<ReturnType<TrackerStore["listTrackedPlayers"]>>[number];
+      match: Awaited<ReturnType<TrackerProvider["getLatestCompetitiveMatch"]>>;
+    } | null = null;
+
+    for (const player of players) {
+      try {
+        const match = await this.provider.getLatestCompetitiveMatch(playerToIdentity(player));
+        if (!match) {
+          continue;
+        }
+
+        if (!latestCandidate || compareMatchDates(match.startedAt, latestCandidate.match?.startedAt ?? null) > 0) {
+          latestCandidate = { player, match };
+        }
+      } catch (error) {
+        failures.push(`${player.displayName ?? `${player.gameName}#${player.tagLine}`}: ${formatError(error)}`);
+      }
+    }
+
+    if (!latestCandidate || !latestCandidate.match) {
+      return { posted: false, failures };
+    }
+
+    const state = await this.store.getPlayerState(latestCandidate.player.id);
+    const snapshot = await this.provider.getPlayerSnapshot(playerToIdentity(latestCandidate.player));
+    const post = buildMatchPost(
+      latestCandidate.player.displayName ?? `${latestCandidate.player.gameName}#${latestCandidate.player.tagLine}`,
+      latestCandidate.match,
+      state,
+      snapshot
+    );
+
+    await this.webhook.postMessage(formatMatchSummary(post));
+    return { posted: true, failures };
   }
 
   public async pollMatches(): Promise<{
@@ -187,4 +230,10 @@ function buildMatchPost(
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function compareMatchDates(left: string | null, right: string | null): number {
+  const leftTime = left ? Date.parse(left) : Number.NEGATIVE_INFINITY;
+  const rightTime = right ? Date.parse(right) : Number.NEGATIVE_INFINITY;
+  return leftTime - rightTime;
 }

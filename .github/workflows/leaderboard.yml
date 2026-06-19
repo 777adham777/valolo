@@ -1,4 +1,4 @@
-name: Post Daily Leaderboard
+name: Envoyer Le Classement Quotidien
 
 on:
   schedule:
@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Post leaderboard
+      - name: Envoyer le classement
         run: npm run tracker:leaderboard
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

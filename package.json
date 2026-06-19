@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "tracker:poll": "tsx src/index.ts poll",
     "tracker:leaderboard": "tsx src/index.ts leaderboard",
+    "tracker:latest-match": "tsx src/index.ts latest-match",
     "tracker:sync": "tsx src/index.ts sync",
     "tracker:add-player": "tsx src/index.ts add-player",
     "tracker:list-players": "tsx src/index.ts list-players",

@@ -26,6 +26,7 @@ class FakeProvider implements TrackerProvider {
   };
 
   public latestMatch: MatchSummary | null = null;
+  public latestMatchesByPuuid: Map<string, MatchSummary | null> = new Map();
   public snapshot: PlayerSnapshot = {
     rankTier: 12,
     rankName: "Gold 1",
@@ -34,6 +35,7 @@ class FakeProvider implements TrackerProvider {
     games: 10,
     winRate: 80
   };
+  public snapshotsByPuuid: Map<string, PlayerSnapshot> = new Map();
 
   public shouldFailFor: Set<string> = new Set();
 
@@ -46,7 +48,7 @@ class FakeProvider implements TrackerProvider {
       throw new Error("provider exploded");
     }
 
-    return this.snapshot;
+    return this.snapshotsByPuuid.get(player.puuid) ?? this.snapshot;
   }
 
   public async getLatestCompetitiveMatch(player: PlayerIdentity): Promise<MatchSummary | null> {
@@ -54,7 +56,7 @@ class FakeProvider implements TrackerProvider {
       throw new Error("provider exploded");
     }
 
-    return this.latestMatch;
+    return this.latestMatchesByPuuid.get(player.puuid) ?? this.latestMatch;
   }
 }
 
@@ -193,10 +195,37 @@ describe("TrackerService", () => {
     expect(result.postedMatches).toBe(1);
     expect(webhook.payloads).toHaveLength(1);
   });
+
+  it("can post the latest tracked match manually", async () => {
+    const { service, provider, webhook } = createHarness();
+    const tracker = await service;
+
+    provider.latestMatch = createMatch("match-1", "2026-06-19T18:00:00.000Z");
+    await tracker.addPlayer("Input#Tag", "eu");
+    provider.latestMatchesByPuuid.set("puuid-1", createMatch("match-1", "2026-06-19T18:00:00.000Z"));
+
+    provider.resolvedPlayer = {
+      gameName: "Other",
+      tagLine: "EUW",
+      region: "eu",
+      puuid: "puuid-2",
+      displayName: "Other#EUW"
+    };
+    provider.latestMatch = createMatch("match-2", "2026-06-19T19:30:00.000Z");
+    await tracker.addPlayer("Other#EUW", "eu");
+    provider.latestMatchesByPuuid.set("puuid-2", createMatch("match-2", "2026-06-19T19:30:00.000Z"));
+
+    const result = await tracker.postLatestTrackedMatch();
+
+    expect(result.posted).toBe(true);
+    expect(webhook.payloads).toHaveLength(1);
+    const embed = webhook.payloads[0]?.embeds?.[0] as Record<string, unknown>;
+    expect(String(embed.title)).toContain("Other#EUW");
+  });
 });
 
 describe("formatters", () => {
-  it("sorts leaderboard entries consistently and renders rank plus win rate", () => {
+  it("sorts leaderboard entries consistently and renders french rank plus winrate", () => {
     const payload = formatLeaderboard([
       {
         playerId: 1,
@@ -223,10 +252,11 @@ describe("formatters", () => {
     const description = String(payload.embeds?.[0]?.description);
     expect(description).toContain("Higher");
     expect(description).toContain("Gold 1");
-    expect(description).toContain("55.6% (5/9)");
+    expect(description).toContain("55.6%WR");
+    expect(description).toContain("5-4");
   });
 
-  it("renders rank changes gracefully when values are missing", () => {
+  it("renders french rank changes gracefully when values are missing", () => {
     const payload = formatMatchSummary({
       playerDisplayName: "Demo#EUW",
       matchId: "abc",
@@ -250,7 +280,7 @@ describe("formatters", () => {
 
     const embed = payload.embeds?.[0] as Record<string, unknown>;
     const fields = embed.fields as Array<Record<string, unknown>>;
-    expect(String(fields[1]?.value)).toContain("Unknown -> Gold 2");
+    expect(String(fields[1]?.value)).toContain("Inconnu -> Gold 2");
     expect(String(fields[2]?.value)).toContain("N/A -> 55 RR");
   });
 });
@@ -328,12 +358,12 @@ function createHarness(): {
   return { service, store, provider, webhook };
 }
 
-function createMatch(matchId: string): MatchSummary {
+function createMatch(matchId: string, startedAt = "2026-06-19T18:00:00.000Z"): MatchSummary {
   return {
     matchId,
     mode: "Competitive",
     mapName: "Ascent",
-    startedAt: "2026-06-19T18:00:00.000Z",
+    startedAt,
     agentName: "Sova",
     kills: 20,
     deaths: 15,

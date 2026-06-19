@@ -30,28 +30,28 @@ async function main(): Promise<void> {
         const regionInput = process.argv[4];
         const displayName = normalizeOptionalText(process.argv[5]);
         if (!riotId || !regionInput) {
-          throw new Error("Usage: add-player <name#tag> <region> [displayName]");
+          throw new Error("Usage : add-player <name#tag> <region> [displayName]");
         }
 
         await tracker.addPlayer(riotId, parseRegion(regionInput), displayName);
-        console.log(`Added or updated tracked player ${riotId} in ${regionInput}.`);
+        console.log(`Joueur ${riotId} ajoute ou mis a jour sur ${regionInput}.`);
         break;
       }
       case "remove-player": {
         const riotId = process.argv[3];
         const regionInput = process.argv[4];
         if (!riotId || !regionInput) {
-          throw new Error("Usage: remove-player <name#tag> <region>");
+          throw new Error("Usage : remove-player <name#tag> <region>");
         }
 
         const removed = await tracker.removePlayer(riotId, parseRegion(regionInput));
-        console.log(removed ? `Removed ${riotId} from tracking.` : `No tracked player found for ${riotId} in ${regionInput}.`);
+        console.log(removed ? `${riotId} a ete retire du suivi.` : `Aucun joueur suivi trouve pour ${riotId} dans ${regionInput}.`);
         break;
       }
       case "list-players": {
         const players = await tracker.listPlayers();
         if (players.length === 0) {
-          console.log("No tracked players.");
+          console.log("Aucun joueur suivi.");
         } else {
           console.log(players.join("\n"));
         }
@@ -59,7 +59,7 @@ async function main(): Promise<void> {
       }
       case "sync": {
         const result = await tracker.syncSnapshots();
-        console.log(`Updated ${result.updatedPlayers} player snapshots.`);
+        console.log(`${result.updatedPlayers} snapshot(s) de joueur mises a jour.`);
         if (result.failures.length > 0) {
           console.error(result.failures.join("\n"));
           process.exitCode = 1;
@@ -68,7 +68,15 @@ async function main(): Promise<void> {
       }
       case "leaderboard": {
         const result = await tracker.postDailyLeaderboard();
-        console.log("Posted daily leaderboard.");
+        console.log("Classement quotidien envoye.");
+        if (result.failures.length > 0) {
+          console.error(result.failures.join("\n"));
+        }
+        break;
+      }
+      case "latest-match": {
+        const result = await tracker.postLatestTrackedMatch();
+        console.log(result.posted ? "Dernier match suivi envoye." : "Aucun match recent a envoyer.");
         if (result.failures.length > 0) {
           console.error(result.failures.join("\n"));
         }
@@ -76,7 +84,7 @@ async function main(): Promise<void> {
       }
       case "poll": {
         const result = await tracker.pollMatches();
-        console.log(`Checked ${result.checkedPlayers} players and posted ${result.postedMatches} new match summaries.`);
+        console.log(`${result.checkedPlayers} joueur(s) verifie(s), ${result.postedMatches} nouveau(x) resume(s) de match envoye(s).`);
         if (result.failures.length > 0) {
           console.error(result.failures.join("\n"));
           process.exitCode = 1;
@@ -84,7 +92,7 @@ async function main(): Promise<void> {
         break;
       }
       default:
-        throw new Error(`Unknown command "${command}"`);
+        throw new Error(`Commande inconnue "${command}"`);
     }
   } finally {
     store.close();
@@ -93,12 +101,13 @@ async function main(): Promise<void> {
 
 function printUsage(): void {
   console.error([
-    "Usage:",
+    "Usage :",
     "  add-player <name#tag> <region> [displayName]",
     "  remove-player <name#tag> <region>",
     "  list-players",
     "  sync",
     "  leaderboard",
+    "  latest-match",
     "  poll"
   ].join("\n"));
 }
