@@ -199,7 +199,9 @@ function buildMatchPost(
     mode: string;
     mapName: string;
     startedAt: string | null;
+    gameLengthInMs: number | null;
     agentName: string | null;
+    agentPortraitUrl: string | null;
     kills: number | null;
     deaths: number | null;
     assists: number | null;
@@ -217,10 +219,6 @@ function buildMatchPost(
   return {
     ...match,
     playerDisplayName: displayName,
-    rankBefore: snapshotBefore.rankName,
-    rankAfter: snapshotAfter.rankName,
-    rrBefore: snapshotBefore.rankingInTier,
-    rrAfter: snapshotAfter.rankingInTier,
     rrDelta:
       snapshotBefore.rankingInTier !== null && snapshotAfter.rankingInTier !== null
         ? snapshotAfter.rankingInTier - snapshotBefore.rankingInTier

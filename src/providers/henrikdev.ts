@@ -128,9 +128,11 @@ export class HenrikDevProvider implements TrackerProvider {
     return {
       matchId: expectString(metadata.match_id, "match metadata.match_id"),
       mode: readOptionalString(queue?.name) ?? "Competitive",
-      mapName: readOptionalString(map?.name) ?? "Unknown map",
+      mapName: readOptionalString(map?.name) ?? "Carte inconnue",
       startedAt: readOptionalString(metadata.started_at),
+      gameLengthInMs: readOptionalNumber(metadata.game_length_in_ms),
       agentName: readOptionalString(agent?.name),
+      agentPortraitUrl: buildAgentPortraitUrl(readOptionalString(agent?.id)),
       kills: readOptionalNumber(stats.kills),
       deaths: readOptionalNumber(stats.deaths),
       assists: readOptionalNumber(stats.assists),
@@ -217,4 +219,12 @@ function readOptionalString(value: unknown): string | null {
 
 function readOptionalNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function buildAgentPortraitUrl(agentId: string | null): string | null {
+  if (!agentId) {
+    return null;
+  }
+
+  return `https://media.valorant-api.com/agents/${agentId}/displayicon.png`;
 }

@@ -6,12 +6,12 @@ export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPa
     ? "Aucun joueur suivi pour le moment."
     : entries
       .map((entry, index) => {
-        const rank = entry.rankName ? `${entry.rankName}${entry.rankingInTier !== null ? ` · ${entry.rankingInTier} RR` : ""}` : "Non classe";
+        const rank = entry.rankName ? `${entry.rankName}${entry.rankingInTier !== null ? ` | ${entry.rankingInTier} RR` : ""}` : "Non classe";
         const winRate = formatWinRate(entry);
-        const icon = getPlacementIcon(index);
+        const label = getPlacementLabel(index);
 
         return [
-          `${icon} **${entry.displayName}**`,
+          `${label} **${entry.displayName}**`,
           `> Rang : \`${rank}\``,
           `> Saison : \`${winRate}\``
         ].join("\n");
@@ -33,39 +33,52 @@ export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPa
 }
 
 export function formatMatchSummary(match: MatchSummaryPost): DiscordWebhookPayload {
-  const result = match.didWin === null ? "a termine" : match.didWin ? "a gagne" : "a perdu";
+  const result = match.didWin === null ? "Match termine" : match.didWin ? "Victoire" : "Defaite";
   const score = match.teamScore !== null && match.opponentScore !== null
     ? `${match.teamScore}-${match.opponentScore}`
-    : "Score inconnu";
+    : "Inconnu";
   const kda = [match.kills, match.deaths, match.assists].every((value) => value !== null)
     ? `${match.kills}/${match.deaths}/${match.assists}`
     : "N/A";
-  const rankAfter = match.rankAfter ?? "Inconnu";
-  const rankBefore = match.rankBefore ?? "Inconnu";
-  const rrAfter = match.rrAfter !== null ? `${match.rrAfter} RR` : "N/A";
-  const rrBefore = match.rrBefore !== null ? `${match.rrBefore} RR` : "N/A";
   const rrDelta = formatRrDelta(match.rrDelta);
+  const duration = formatDuration(match.gameLengthInMs);
 
   return {
     embeds: [
       {
-        title: `${match.playerDisplayName} ${result} un match competitif`,
-        description: `**${match.mapName}**\nScore : ${score}\nKDA : ${kda}`,
+        title: match.playerDisplayName,
+        description: `${result} en competitif`,
         color: match.didWin === true ? 0x2ecc71 : match.didWin === false ? 0xe74c3c : 0x3498db,
+        thumbnail: match.agentPortraitUrl ? { url: match.agentPortraitUrl } : undefined,
         fields: [
           {
-            name: "Agent",
-            value: match.agentName ?? "Inconnu",
+            name: "Carte",
+            value: match.mapName,
             inline: true
           },
           {
-            name: "Rang",
-            value: `${rankBefore} -> ${rankAfter}`,
+            name: "Score",
+            value: score,
+            inline: true
+          },
+          {
+            name: "KDA",
+            value: kda,
+            inline: true
+          },
+          {
+            name: "Duree",
+            value: duration,
             inline: true
           },
           {
             name: "RR",
-            value: `${rrBefore} -> ${rrAfter}${rrDelta ? ` (${rrDelta})` : ""}`,
+            value: rrDelta ? `${rrDelta} RR` : "N/A",
+            inline: true
+          },
+          {
+            name: "Agent",
+            value: match.agentName ?? "Inconnu",
             inline: true
           }
         ],
@@ -97,21 +110,32 @@ function formatWinRate(entry: LeaderboardEntry): string {
 
   const losses = Math.max(entry.games - entry.wins, 0);
   const roundedWinRate = Number.isInteger(entry.winRate) ? `${entry.winRate}` : entry.winRate.toFixed(1);
-  return `${roundedWinRate}%WR · ${entry.wins}-${losses}`;
+  return `${roundedWinRate}%WR | ${entry.wins}-${losses}`;
 }
 
-function getPlacementIcon(index: number): string {
+function getPlacementLabel(index: number): string {
   if (index === 0) {
-    return "🥇";
+    return "[TOP 1]";
   }
 
   if (index === 1) {
-    return "🥈";
+    return "[TOP 2]";
   }
 
   if (index === 2) {
-    return "🥉";
+    return "[TOP 3]";
   }
 
   return `#${index + 1}`;
+}
+
+function formatDuration(gameLengthInMs: number | null): string {
+  if (gameLengthInMs === null) {
+    return "N/A";
+  }
+
+  const totalSeconds = Math.floor(gameLengthInMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }

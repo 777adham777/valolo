@@ -50,7 +50,9 @@ export interface MatchSummary {
   mode: string;
   mapName: string;
   startedAt: string | null;
+  gameLengthInMs: number | null;
   agentName: string | null;
+  agentPortraitUrl: string | null;
   kills: number | null;
   deaths: number | null;
   assists: number | null;
@@ -62,10 +64,6 @@ export interface MatchSummary {
 
 export interface MatchSummaryPost extends MatchSummary {
   playerDisplayName: string;
-  rankBefore: string | null;
-  rankAfter: string | null;
-  rrBefore: number | null;
-  rrAfter: number | null;
   rrDelta: number | null;
 }
 

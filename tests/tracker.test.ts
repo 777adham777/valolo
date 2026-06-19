@@ -250,20 +250,23 @@ describe("formatters", () => {
     ]);
 
     const description = String(payload.embeds?.[0]?.description);
+    expect(description).toContain("[TOP 1]");
     expect(description).toContain("Higher");
     expect(description).toContain("Gold 1");
     expect(description).toContain("55.6%WR");
     expect(description).toContain("5-4");
   });
 
-  it("renders french rank changes gracefully when values are missing", () => {
+  it("renders compact match card with portrait and essential stats", () => {
     const payload = formatMatchSummary({
       playerDisplayName: "Demo#EUW",
       matchId: "abc",
       mode: "Competitive",
       mapName: "Ascent",
       startedAt: null,
-      agentName: null,
+      gameLengthInMs: 1765000,
+      agentName: "Sova",
+      agentPortraitUrl: "https://media.valorant-api.com/agents/test/displayicon.png",
       kills: 21,
       deaths: 14,
       assists: 9,
@@ -271,17 +274,18 @@ describe("formatters", () => {
       teamScore: 13,
       opponentScore: 9,
       didWin: true,
-      rankBefore: null,
-      rankAfter: "Gold 2",
-      rrBefore: null,
-      rrAfter: 55,
-      rrDelta: null
+      rrDelta: 17
     });
 
     const embed = payload.embeds?.[0] as Record<string, unknown>;
     const fields = embed.fields as Array<Record<string, unknown>>;
-    expect(String(fields[1]?.value)).toContain("Inconnu -> Gold 2");
-    expect(String(fields[2]?.value)).toContain("N/A -> 55 RR");
+    expect(String(embed.title)).toContain("Demo#EUW");
+    expect(String(embed.description)).toContain("Victoire");
+    expect(String(fields[0]?.name)).toBe("Carte");
+    expect(String(fields[1]?.value)).toContain("13-9");
+    expect(String(fields[2]?.value)).toContain("21/14/9");
+    expect(String(fields[3]?.value)).toContain("29:25");
+    expect(String(fields[4]?.value)).toContain("+17 RR");
   });
 });
 
@@ -364,7 +368,9 @@ function createMatch(matchId: string, startedAt = "2026-06-19T18:00:00.000Z"): M
     mode: "Competitive",
     mapName: "Ascent",
     startedAt,
+    gameLengthInMs: 1765000,
     agentName: "Sova",
+    agentPortraitUrl: "https://media.valorant-api.com/agents/test/displayicon.png",
     kills: 20,
     deaths: 15,
     assists: 10,
