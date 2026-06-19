@@ -50,6 +50,7 @@ export interface MatchSummary {
   mode: string;
   mapName: string;
   startedAt: string | null;
+  seasonShort: string | null;
   gameLengthInMs: number | null;
   agentName: string | null;
   agentPortraitUrl: string | null;

@@ -14,6 +14,9 @@ interface HenrikDevClientOptions {
 }
 
 export class HenrikDevProvider implements TrackerProvider {
+  private static readonly MATCH_PAGE_SIZE = 20;
+  private static readonly MATCH_PAGE_LIMIT = 10;
+
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
@@ -45,102 +48,98 @@ export class HenrikDevProvider implements TrackerProvider {
     const response = await this.getJson(`/valorant/v2/by-puuid/mmr/${encodeURIComponent(player.region)}/${encodeURIComponent(player.puuid)}`);
     const data = expectObject(response.data, "mmr data");
     const currentData = expectObject(data.current_data, "mmr current_data");
-    const seasonStats = pickLatestSeasonStats(data.by_season);
-
-    const wins = readOptionalNumber(seasonStats?.wins);
-    const games = readOptionalNumber(seasonStats?.number_of_games);
-    const winRate = wins !== null && games !== null && games > 0
-      ? Number(((wins / games) * 100).toFixed(1))
-      : null;
+    const matchStats = await this.getCurrentSeasonCompetitiveStats(player);
 
     return {
       rankTier: readOptionalNumber(currentData.currenttier),
       rankName: readOptionalString(currentData.currenttierpatched),
       rankingInTier: readOptionalNumber(currentData.ranking_in_tier),
-      wins,
-      games,
-      winRate
+      wins: matchStats.wins,
+      games: matchStats.games,
+      winRate: matchStats.winRate
     };
   }
 
   public async getLatestCompetitiveMatch(player: PlayerIdentity): Promise<MatchSummary | null> {
+    const matches = await this.getCompetitiveMatchesPage(player, 1, 1);
+    return matches[0] ?? null;
+  }
+
+  private async getCurrentSeasonCompetitiveStats(player: PlayerIdentity): Promise<{
+    wins: number | null;
+    games: number | null;
+    winRate: number | null;
+  }> {
+    const firstPageMatches = await this.getCompetitiveMatchesPage(player, 1, HenrikDevProvider.MATCH_PAGE_SIZE);
+    const latestMatch = firstPageMatches[0];
+
+    if (!latestMatch?.seasonShort) {
+      return {
+        wins: null,
+        games: null,
+        winRate: null
+      };
+    }
+
+    const currentSeason = latestMatch.seasonShort;
+    let wins = 0;
+    let losses = 0;
+
+    for (let page = 1; page <= HenrikDevProvider.MATCH_PAGE_LIMIT; page += 1) {
+      const matches = page === 1
+        ? firstPageMatches
+        : await this.getCompetitiveMatchesPage(player, page, HenrikDevProvider.MATCH_PAGE_SIZE);
+
+      if (matches.length === 0) {
+        break;
+      }
+
+      let foundCurrentSeasonInPage = false;
+
+      for (const match of matches) {
+        if (match.seasonShort !== currentSeason) {
+          continue;
+        }
+
+        foundCurrentSeasonInPage = true;
+
+        if (match.didWin === true) {
+          wins += 1;
+        } else if (match.didWin === false) {
+          losses += 1;
+        }
+      }
+
+      if (!foundCurrentSeasonInPage) {
+        break;
+      }
+
+      if (matches.length < HenrikDevProvider.MATCH_PAGE_SIZE) {
+        break;
+      }
+    }
+
+    const games = wins + losses;
+    return {
+      wins,
+      games,
+      winRate: games > 0 ? Number(((wins / games) * 100).toFixed(1)) : 0
+    };
+  }
+
+  private async getCompetitiveMatchesPage(
+    player: PlayerIdentity,
+    page: number,
+    size: number
+  ): Promise<MatchSummary[]> {
     const response = await this.getJson(
-      `/valorant/v4/by-puuid/matches/${encodeURIComponent(player.region)}/pc/${encodeURIComponent(player.puuid)}?mode=competitive&size=1`
+      `/valorant/v4/by-puuid/matches/${encodeURIComponent(player.region)}/pc/${encodeURIComponent(player.puuid)}?mode=competitive&size=${size}&page=${page}`
     );
 
     const matches = expectArray(response.data, "matches");
-    const latestMatch = matches[0];
-    if (!latestMatch || typeof latestMatch !== "object") {
-      return null;
-    }
-
-    const metadata = expectObject((latestMatch as Record<string, unknown>).metadata, "match metadata");
-    const players = expectArray((latestMatch as Record<string, unknown>).players, "match players");
-    const teams = expectArray((latestMatch as Record<string, unknown>).teams, "match teams");
-
-    const playerEntry = players.find((entry) => {
-      if (!entry || typeof entry !== "object") {
-        return false;
-      }
-
-      return (entry as Record<string, unknown>).puuid === player.puuid;
-    }) as Record<string, unknown> | undefined;
-
-    if (!playerEntry) {
-      throw new Error(`Tracked player ${player.puuid} was not present in latest competitive match payload`);
-    }
-
-    const teamId = readOptionalString(playerEntry.team_id);
-    const teamEntry = teams.find((entry) => {
-      if (!entry || typeof entry !== "object") {
-        return false;
-      }
-
-      return readOptionalString((entry as Record<string, unknown>).team_id) === teamId;
-    }) as Record<string, unknown> | undefined;
-
-    const opponentEntry = teams.find((entry) => {
-      if (!entry || typeof entry !== "object") {
-        return false;
-      }
-
-      return readOptionalString((entry as Record<string, unknown>).team_id) !== teamId;
-    }) as Record<string, unknown> | undefined;
-
-    const stats = expectObject(playerEntry.stats, "player stats");
-    const rounds = teamEntry && typeof teamEntry.rounds === "object" && teamEntry.rounds !== null
-      ? expectObject(teamEntry.rounds, "team rounds")
-      : null;
-    const opponentRounds = opponentEntry && typeof opponentEntry.rounds === "object" && opponentEntry.rounds !== null
-      ? expectObject(opponentEntry.rounds, "opponent rounds")
-      : null;
-
-    const queue = metadata.queue && typeof metadata.queue === "object"
-      ? expectObject(metadata.queue, "queue")
-      : null;
-    const map = metadata.map && typeof metadata.map === "object"
-      ? expectObject(metadata.map, "map")
-      : null;
-    const agent = playerEntry.agent && typeof playerEntry.agent === "object"
-      ? expectObject(playerEntry.agent, "agent")
-      : null;
-
-    return {
-      matchId: expectString(metadata.match_id, "match metadata.match_id"),
-      mode: readOptionalString(queue?.name) ?? "Competitive",
-      mapName: readOptionalString(map?.name) ?? "Carte inconnue",
-      startedAt: readOptionalString(metadata.started_at),
-      gameLengthInMs: readOptionalNumber(metadata.game_length_in_ms),
-      agentName: readOptionalString(agent?.name),
-      agentPortraitUrl: buildAgentPortraitUrl(readOptionalString(agent?.id)),
-      kills: readOptionalNumber(stats.kills),
-      deaths: readOptionalNumber(stats.deaths),
-      assists: readOptionalNumber(stats.assists),
-      score: readOptionalNumber(stats.score),
-      teamScore: readOptionalNumber(rounds?.won),
-      opponentScore: readOptionalNumber(opponentRounds?.won),
-      didWin: typeof teamEntry?.won === "boolean" ? teamEntry.won : null
-    };
+    return matches
+      .filter((match): match is Record<string, unknown> => Boolean(match) && typeof match === "object")
+      .map((match) => parseMatchSummary(match, player.puuid));
   }
 
   private async getJson(path: string): Promise<Record<string, unknown>> {
@@ -174,34 +173,77 @@ function parseRiotId(riotId: string): { gameName: string; tagLine: string } {
   return { gameName, tagLine };
 }
 
-function pickLatestSeasonStats(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
+function parseMatchSummary(match: Record<string, unknown>, puuid: string): MatchSummary {
+  const metadata = expectObject(match.metadata, "match metadata");
+  const players = expectArray(match.players, "match players");
+  const teams = expectArray(match.teams, "match teams");
 
-  const seasons = Object.entries(value as Record<string, unknown>)
-    .filter(([, seasonValue]) => seasonValue && typeof seasonValue === "object")
-    .map(([seasonKey, seasonValue]) => ({
-      seasonKey,
-      seasonValue: seasonValue as Record<string, unknown>,
-      sortKey: parseSeasonKey(seasonKey)
-    }))
-    .filter(({ seasonValue }) => !("error" in seasonValue))
-    .filter(({ seasonValue }) => typeof seasonValue.number_of_games === "number")
-    .filter(({ sortKey }) => sortKey !== null);
-
-  seasons.sort((left, right) => {
-    const leftKey = left.sortKey!;
-    const rightKey = right.sortKey!;
-
-    if (leftKey.episode !== rightKey.episode) {
-      return rightKey.episode - leftKey.episode;
+  const playerEntry = players.find((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return false;
     }
 
-    return rightKey.act - leftKey.act;
-  });
+    return (entry as Record<string, unknown>).puuid === puuid;
+  }) as Record<string, unknown> | undefined;
 
-  return seasons[0]?.seasonValue ?? null;
+  if (!playerEntry) {
+    throw new Error(`Tracked player ${puuid} was not present in competitive match payload`);
+  }
+
+  const teamId = readOptionalString(playerEntry.team_id);
+  const teamEntry = teams.find((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return false;
+    }
+
+    return readOptionalString((entry as Record<string, unknown>).team_id) === teamId;
+  }) as Record<string, unknown> | undefined;
+
+  const opponentEntry = teams.find((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return false;
+    }
+
+    return readOptionalString((entry as Record<string, unknown>).team_id) !== teamId;
+  }) as Record<string, unknown> | undefined;
+
+  const stats = expectObject(playerEntry.stats, "player stats");
+  const rounds = teamEntry && typeof teamEntry.rounds === "object" && teamEntry.rounds !== null
+    ? expectObject(teamEntry.rounds, "team rounds")
+    : null;
+  const opponentRounds = opponentEntry && typeof opponentEntry.rounds === "object" && opponentEntry.rounds !== null
+    ? expectObject(opponentEntry.rounds, "opponent rounds")
+    : null;
+  const queue = metadata.queue && typeof metadata.queue === "object"
+    ? expectObject(metadata.queue, "queue")
+    : null;
+  const map = metadata.map && typeof metadata.map === "object"
+    ? expectObject(metadata.map, "map")
+    : null;
+  const agent = playerEntry.agent && typeof playerEntry.agent === "object"
+    ? expectObject(playerEntry.agent, "agent")
+    : null;
+  const season = metadata.season && typeof metadata.season === "object"
+    ? expectObject(metadata.season, "season")
+    : null;
+
+  return {
+    matchId: expectString(metadata.match_id, "match metadata.match_id"),
+    mode: readOptionalString(queue?.name) ?? "Competitive",
+    mapName: readOptionalString(map?.name) ?? "Carte inconnue",
+    startedAt: readOptionalString(metadata.started_at),
+    seasonShort: readOptionalString(season?.short),
+    gameLengthInMs: readOptionalNumber(metadata.game_length_in_ms),
+    agentName: readOptionalString(agent?.name),
+    agentPortraitUrl: buildAgentPortraitUrl(readOptionalString(agent?.id)),
+    kills: readOptionalNumber(stats.kills),
+    deaths: readOptionalNumber(stats.deaths),
+    assists: readOptionalNumber(stats.assists),
+    score: readOptionalNumber(stats.score),
+    teamScore: readOptionalNumber(rounds?.won),
+    opponentScore: readOptionalNumber(opponentRounds?.won),
+    didWin: typeof teamEntry?.won === "boolean" ? teamEntry.won : null
+  };
 }
 
 function expectObject(value: unknown, label: string): Record<string, unknown> {
@@ -242,19 +284,4 @@ function buildAgentPortraitUrl(agentId: string | null): string | null {
   }
 
   return `https://media.valorant-api.com/agents/${agentId}/displayicon.png`;
-}
-
-function parseSeasonKey(seasonKey: string): { episode: number; act: number } | null {
-  const match = /^e(\d+)a(\d+)$/.exec(seasonKey);
-  if (!match) {
-    return null;
-  }
-
-  const episode = Number(match[1]);
-  const act = Number(match[2]);
-  if (!Number.isFinite(episode) || !Number.isFinite(act)) {
-    return null;
-  }
-
-  return { episode, act };
 }

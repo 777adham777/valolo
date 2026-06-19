@@ -265,6 +265,7 @@ describe("formatters", () => {
       mode: "Competitive",
       mapName: "Ascent",
       startedAt: null,
+      seasonShort: "e11a3",
       gameLengthInMs: 1765000,
       agentName: "Sova",
       agentPortraitUrl: "https://media.valorant-api.com/agents/test/displayicon.png",
@@ -300,23 +301,28 @@ describe("HenrikDevProvider", () => {
             currenttier: 16,
             currenttierpatched: "Platinum 2",
             ranking_in_tier: 60
-          },
-          by_season: {
-            e11a6: {
-              error: "No data available"
-            },
-            e11a5: {
-              error: "No data available"
-            },
-            e11a4: {
-              error: "No data available"
-            },
-            e11a3: {
-              wins: 6,
-              number_of_games: 10
-            }
           }
         }
+      },
+      {
+        status: 200,
+        data: [
+          createApiMatch("867e1d40-64ba-5da0-9e6c-dec45f2fcfa3", {
+            matchId: "m1",
+            seasonShort: "e11a3",
+            didWin: true
+          }),
+          createApiMatch("867e1d40-64ba-5da0-9e6c-dec45f2fcfa3", {
+            matchId: "m2",
+            seasonShort: "e11a3",
+            didWin: true
+          }),
+          createApiMatch("867e1d40-64ba-5da0-9e6c-dec45f2fcfa3", {
+            matchId: "m3",
+            seasonShort: "e11a3",
+            didWin: false
+          })
+        ]
       }
     ];
 
@@ -339,12 +345,12 @@ describe("HenrikDevProvider", () => {
 
     expect(snapshot.rankName).toBe("Platinum 2");
     expect(snapshot.rankingInTier).toBe(60);
-    expect(snapshot.wins).toBe(6);
-    expect(snapshot.games).toBe(10);
-    expect(snapshot.winRate).toBe(60);
+    expect(snapshot.wins).toBe(2);
+    expect(snapshot.games).toBe(3);
+    expect(snapshot.winRate).toBe(66.7);
   });
 
-  it("sorts season keys numerically instead of lexicographically", async () => {
+  it("computes current-season stats from competitive match history and ignores older seasons", async () => {
     const responses = [
       {
         status: 200,
@@ -353,22 +359,33 @@ describe("HenrikDevProvider", () => {
             currenttier: 16,
             currenttierpatched: "Platinum 2",
             ranking_in_tier: 24
-          },
-          by_season: {
-            e9a3: {
-              wins: 0,
-              number_of_games: 3
-            },
-            e10a3: {
-              wins: 12,
-              number_of_games: 20
-            },
-            e11a3: {
-              wins: 49,
-              number_of_games: 86
-            }
           }
         }
+      },
+      {
+        status: 200,
+        data: [
+          createApiMatch("98e2cf2f-95f3-5a56-8d92-6b48c93ab8d6", {
+            matchId: "m1",
+            seasonShort: "e11a3",
+            didWin: true
+          }),
+          createApiMatch("98e2cf2f-95f3-5a56-8d92-6b48c93ab8d6", {
+            matchId: "m2",
+            seasonShort: "e11a3",
+            didWin: false
+          }),
+          createApiMatch("98e2cf2f-95f3-5a56-8d92-6b48c93ab8d6", {
+            matchId: "m3",
+            seasonShort: "e11a3",
+            didWin: true
+          }),
+          createApiMatch("98e2cf2f-95f3-5a56-8d92-6b48c93ab8d6", {
+            matchId: "old",
+            seasonShort: "e10a3",
+            didWin: false
+          })
+        ]
       }
     ];
 
@@ -389,9 +406,9 @@ describe("HenrikDevProvider", () => {
       puuid: "98e2cf2f-95f3-5a56-8d92-6b48c93ab8d6"
     });
 
-    expect(snapshot.wins).toBe(49);
-    expect(snapshot.games).toBe(86);
-    expect(snapshot.winRate).toBe(57);
+    expect(snapshot.wins).toBe(2);
+    expect(snapshot.games).toBe(3);
+    expect(snapshot.winRate).toBe(66.7);
   });
 });
 
@@ -419,6 +436,7 @@ function createMatch(matchId: string, startedAt = "2026-06-19T18:00:00.000Z"): M
     mode: "Competitive",
     mapName: "Ascent",
     startedAt,
+    seasonShort: "e11a3",
     gameLengthInMs: 1765000,
     agentName: "Sova",
     agentPortraitUrl: "https://media.valorant-api.com/agents/test/displayicon.png",
@@ -429,5 +447,63 @@ function createMatch(matchId: string, startedAt = "2026-06-19T18:00:00.000Z"): M
     teamScore: 13,
     opponentScore: 9,
     didWin: true
+  };
+}
+
+function createApiMatch(
+  puuid: string,
+  input: {
+    matchId: string;
+    seasonShort: string;
+    didWin: boolean;
+  }
+): Record<string, unknown> {
+  return {
+    metadata: {
+      match_id: input.matchId,
+      started_at: "2026-06-19T18:00:00.000Z",
+      game_length_in_ms: 1765000,
+      queue: {
+        name: "Competitive"
+      },
+      map: {
+        name: "Ascent"
+      },
+      season: {
+        short: input.seasonShort
+      }
+    },
+    players: [
+      {
+        puuid,
+        team_id: "Blue",
+        agent: {
+          id: "test-agent-id",
+          name: "Sova"
+        },
+        stats: {
+          kills: 20,
+          deaths: 15,
+          assists: 10,
+          score: 315
+        }
+      }
+    ],
+    teams: [
+      {
+        team_id: "Blue",
+        won: input.didWin,
+        rounds: {
+          won: input.didWin ? 13 : 9
+        }
+      },
+      {
+        team_id: "Red",
+        won: !input.didWin,
+        rounds: {
+          won: input.didWin ? 9 : 13
+        }
+      }
+    ]
   };
 }
