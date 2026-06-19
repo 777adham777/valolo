@@ -1,0 +1,83 @@
+name: Manage Tracked Players
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Command to run"
+        required: true
+        type: choice
+        options:
+          - add
+          - remove
+          - list
+      riot_id:
+        description: "Riot ID, for example TenZ#NA1"
+        required: false
+        type: string
+      region:
+        description: "Region: ap, br, eu, kr, latam, na"
+        required: false
+        type: string
+      display_name:
+        description: "Optional display name when adding"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate add/remove inputs
+        if: ${{ inputs.action != 'list' }}
+        shell: bash
+        run: |
+          if [ -z "${{ inputs.riot_id }}" ] || [ -z "${{ inputs.region }}" ]; then
+            echo "riot_id and region are required for add/remove" >&2
+            exit 1
+          fi
+
+      - name: Add player
+        if: ${{ inputs.action == 'add' }}
+        run: npm run tracker:add-player -- "${{ inputs.riot_id }}" "${{ inputs.region }}" "${{ inputs.display_name }}"
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          LEADERBOARD_TIMEZONE: Europe/Paris
+
+      - name: Remove player
+        if: ${{ inputs.action == 'remove' }}
+        run: npm run tracker:remove-player -- "${{ inputs.riot_id }}" "${{ inputs.region }}"
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          LEADERBOARD_TIMEZONE: Europe/Paris
+
+      - name: List players
+        if: ${{ inputs.action == 'list' }}
+        run: npm run tracker:list-players
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          LEADERBOARD_TIMEZONE: Europe/Paris

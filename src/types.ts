@@ -1,0 +1,96 @@
+export type Region = "ap" | "br" | "eu" | "kr" | "latam" | "na";
+
+export interface TrackedPlayer {
+  id: number;
+  gameName: string;
+  tagLine: string;
+  region: Region;
+  puuid: string;
+  displayName: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlayerState {
+  trackedPlayerId: number;
+  rankTier: number | null;
+  rankName: string | null;
+  rankingInTier: number | null;
+  wins: number | null;
+  games: number | null;
+  winRate: number | null;
+  lastProcessedMatchId: string | null;
+  lastCheckedAt: string | null;
+  updatedAt: string;
+}
+
+export interface PlayerIdentity {
+  gameName: string;
+  tagLine: string;
+  region: Region;
+  puuid: string;
+}
+
+export interface ResolvedPlayer extends PlayerIdentity {
+  displayName: string;
+}
+
+export interface PlayerSnapshot {
+  rankTier: number | null;
+  rankName: string | null;
+  rankingInTier: number | null;
+  wins: number | null;
+  games: number | null;
+  winRate: number | null;
+}
+
+export interface MatchSummary {
+  matchId: string;
+  mode: string;
+  mapName: string;
+  startedAt: string | null;
+  agentName: string | null;
+  kills: number | null;
+  deaths: number | null;
+  assists: number | null;
+  score: number | null;
+  teamScore: number | null;
+  opponentScore: number | null;
+  didWin: boolean | null;
+}
+
+export interface MatchSummaryPost extends MatchSummary {
+  playerDisplayName: string;
+  rankBefore: string | null;
+  rankAfter: string | null;
+  rrBefore: number | null;
+  rrAfter: number | null;
+  rrDelta: number | null;
+}
+
+export interface LeaderboardEntry {
+  playerId: number;
+  displayName: string;
+  rankTier: number | null;
+  rankName: string | null;
+  rankingInTier: number | null;
+  winRate: number | null;
+  wins: number | null;
+  games: number | null;
+}
+
+export interface TrackerProvider {
+  resolvePlayer(riotId: string, region: Region): Promise<ResolvedPlayer>;
+  getPlayerSnapshot(player: PlayerIdentity): Promise<PlayerSnapshot>;
+  getLatestCompetitiveMatch(player: PlayerIdentity): Promise<MatchSummary | null>;
+}
+
+export interface DiscordWebhookClient {
+  postMessage(payload: DiscordWebhookPayload): Promise<void>;
+}
+
+export interface DiscordWebhookPayload {
+  content?: string;
+  embeds?: Array<Record<string, unknown>>;
+}

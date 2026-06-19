@@ -1,0 +1,29 @@
+{
+  "name": "valorant-discord-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.17"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "tracker:poll": "tsx src/index.ts poll",
+    "tracker:leaderboard": "tsx src/index.ts leaderboard",
+    "tracker:sync": "tsx src/index.ts sync",
+    "tracker:add-player": "tsx src/index.ts add-player",
+    "tracker:list-players": "tsx src/index.ts list-players",
+    "tracker:remove-player": "tsx src/index.ts remove-player"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.15.15"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
