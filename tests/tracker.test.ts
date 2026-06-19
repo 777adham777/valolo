@@ -27,6 +27,8 @@ class FakeProvider implements TrackerProvider {
 
   public latestMatch: MatchSummary | null = null;
   public latestMatchesByPuuid: Map<string, MatchSummary | null> = new Map();
+  public recentMatches: MatchSummary[] | null = null;
+  public recentMatchesByPuuid: Map<string, MatchSummary[]> = new Map();
   public snapshot: PlayerSnapshot = {
     rankTier: 12,
     rankName: "Gold 1",
@@ -56,6 +58,15 @@ class FakeProvider implements TrackerProvider {
 
     return this.latestMatchesByPuuid.get(player.puuid) ?? this.latestMatch;
   }
+
+  public async getRecentCompetitiveMatches(player: PlayerIdentity, limit: number): Promise<MatchSummary[]> {
+    if (this.shouldFailFor.has(player.puuid)) {
+      throw new Error("provider exploded");
+    }
+
+    const matches = this.recentMatchesByPuuid.get(player.puuid) ?? this.recentMatches ?? (this.latestMatch ? [this.latestMatch] : []);
+    return matches.slice(0, limit);
+  }
 }
 
 class FakeWebhook implements DiscordWebhookClient {
@@ -64,6 +75,8 @@ class FakeWebhook implements DiscordWebhookClient {
   public async postMessage(payload: DiscordWebhookPayload): Promise<void> {
     this.payloads.push(payload);
   }
+
+  public async checkConnection(): Promise<void> {}
 }
 
 const stores: TrackerStore[] = [];
@@ -122,7 +135,7 @@ describe("TrackerService", () => {
     expect(webhook.payloads).toHaveLength(0);
   });
 
-  it("posts exactly once for a new competitive match and updates state", async () => {
+  it("posts all unposted competitive matches oldest first and updates state", async () => {
     const { service, provider, store, webhook } = createHarness();
     const tracker = await service;
     const db = await store;
@@ -135,26 +148,39 @@ describe("TrackerService", () => {
     };
     await tracker.addPlayer("Input#Tag", "eu");
 
-    provider.latestMatch = createMatch("match-2");
+    provider.recentMatches = [
+      createMatch("match-3", "2026-06-19T20:00:00.000Z"),
+      createMatch("match-2", "2026-06-19T19:00:00.000Z"),
+      createMatch("match-1", "2026-06-19T18:00:00.000Z")
+    ];
     provider.snapshot = {
       rankTier: 12,
       rankName: "Gold 1",
-      rankingInTier: 61,
-      lastRrChange: 21
+      rankingInTier: 72,
+      lastRrChange: 11
     };
 
     const result = await tracker.pollMatches();
 
-    expect(result.postedMatches).toBe(1);
-    expect(webhook.payloads).toHaveLength(1);
-    const embed = webhook.payloads[0]?.embeds?.[0] as Record<string, unknown>;
-    const fields = embed.fields as Array<Record<string, unknown>>;
-    expect(fields.find((field) => field.name === "RR")?.value).toBe("+21 RR");
+    expect(result.postedMatches).toBe(2);
+    expect(webhook.payloads).toHaveLength(2);
+    const firstEmbed = webhook.payloads[0]?.embeds?.[0] as Record<string, unknown>;
+    const secondEmbed = webhook.payloads[1]?.embeds?.[0] as Record<string, unknown>;
+    const firstFields = firstEmbed.fields as Array<Record<string, unknown>>;
+    const secondFields = secondEmbed.fields as Array<Record<string, unknown>>;
+    expect(String(firstEmbed.footer && (firstEmbed.footer as Record<string, unknown>).text)).toContain("match-2");
+    expect(String(secondEmbed.footer && (secondEmbed.footer as Record<string, unknown>).text)).toContain("match-3");
+    expect(firstFields.find((field) => field.name === "RR")?.value).toBe("N/A");
+    expect(secondFields.find((field) => field.name === "RR")?.value).toBe("+11 RR");
 
     const player = (await db.listTrackedPlayers())[0]!;
     const state = await db.getPlayerState(player.id);
-    expect(state.lastProcessedMatchId).toBe("match-2");
-    expect(state.rankingInTier).toBe(61);
+    expect(state.lastProcessedMatchId).toBe("match-3");
+    expect(state.rankingInTier).toBe(72);
+
+    const secondPoll = await tracker.pollMatches();
+    expect(secondPoll.postedMatches).toBe(0);
+    expect(webhook.payloads).toHaveLength(2);
   });
 
   it("keeps processing other players when one player fails", async () => {

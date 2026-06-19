@@ -14,6 +14,8 @@ interface HenrikDevClientOptions {
 }
 
 export class HenrikDevProvider implements TrackerProvider {
+  private static readonly MAX_MATCH_LIMIT = 10;
+
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
@@ -56,14 +58,15 @@ export class HenrikDevProvider implements TrackerProvider {
   }
 
   public async getLatestCompetitiveMatch(player: PlayerIdentity): Promise<MatchSummary | null> {
-    const matches = await this.getCompetitiveMatches(player, 1);
+    const matches = await this.getRecentCompetitiveMatches(player, 1);
     return matches[0] ?? null;
   }
 
-  private async getCompetitiveMatches(
+  public async getRecentCompetitiveMatches(
     player: PlayerIdentity,
-    size: number
+    limit: number
   ): Promise<MatchSummary[]> {
+    const size = Math.max(1, Math.min(Math.floor(limit), HenrikDevProvider.MAX_MATCH_LIMIT));
     const response = await this.getJson(
       `/valorant/v4/by-puuid/matches/${encodeURIComponent(player.region)}/pc/${encodeURIComponent(player.puuid)}?mode=competitive&size=${size}`
     );
@@ -75,16 +78,24 @@ export class HenrikDevProvider implements TrackerProvider {
   }
 
   private async getJson(path: string): Promise<Record<string, unknown>> {
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+    const response = await withRetry(async () => this.fetchImpl(`${this.baseUrl}${path}`, {
       headers: {
         Authorization: this.apiKey,
         Accept: "application/json"
       }
-    });
+    }));
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`HenrikDev request failed with ${response.status}: ${body}`);
+      const retryAfter = response.headers.get("retry-after");
+      const rateLimitRemaining = response.headers.get("x-ratelimit-remaining");
+      const rateLimitReset = response.headers.get("x-ratelimit-reset");
+      const details = [
+        retryAfter ? `retry-after=${retryAfter}` : null,
+        rateLimitRemaining ? `x-ratelimit-remaining=${rateLimitRemaining}` : null,
+        rateLimitReset ? `x-ratelimit-reset=${rateLimitReset}` : null
+      ].filter(Boolean).join(", ");
+      throw new Error(`HenrikDev request failed with ${response.status}${details ? ` (${details})` : ""}: ${body}`);
     }
 
     const data = await response.json() as unknown;
@@ -94,6 +105,42 @@ export class HenrikDevProvider implements TrackerProvider {
 
     return data as Record<string, unknown>;
   }
+}
+
+async function withRetry(request: () => Promise<Response>, attempts = 3): Promise<Response> {
+  let lastResponse: Response | null = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const response = await request();
+    if (!shouldRetry(response) || attempt === attempts) {
+      return response;
+    }
+
+    lastResponse = response;
+    await delay(getRetryDelayInMs(response, attempt));
+  }
+
+  return lastResponse ?? request();
+}
+
+function shouldRetry(response: Response): boolean {
+  return response.status === 429 || response.status >= 500;
+}
+
+function getRetryDelayInMs(response: Response, attempt: number): number {
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter) {
+    const parsed = Number(retryAfter);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return parsed * 1000;
+    }
+  }
+
+  return 500 * attempt;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseRiotId(riotId: string): { gameName: string; tagLine: string } {

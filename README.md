@@ -5,7 +5,7 @@ Worker leger pour Discord qui suit les joueurs Valorant, publie un classement qu
 ## Fonctionnalites
 
 - Classement quotidien avec pseudo, rang actuel et RR
-- Verification automatique des matchs competitifs avec dedupe stricte sur le dernier match traite
+- Verification automatique des matchs competitifs recents avec dedupe persistante par match poste
 - Resume de match avec evolution de rang/RR
 - Stockage persistant via Turso
 - Workflows GitHub Actions pour automatisation et administration manuelle
@@ -63,10 +63,12 @@ Worker leger pour Discord qui suit les joueurs Valorant, publie un classement qu
 
 - `npm run tracker:add-player -- "<name>#<tag>" <region> [displayName]`
 - `npm run tracker:remove-player -- "<name>#<tag>" <region>`
+- `npm run tracker:rename-player -- "<name>#<tag>" <region> [displayName]`
 - `npm run tracker:list-players`
 - `npm run tracker:poll`
 - `npm run tracker:leaderboard`
 - `npm run tracker:latest-match`
+- `npm run tracker:health`
 - `npm run tracker:sync`
 
 `sync` met a jour les snapshots de rang sans poster sur Discord.
@@ -102,9 +104,11 @@ References officielles :
 - `.github/workflows/leaderboard.yml`
   Envoie le classement quotidien a 19:00 Europe/Paris.
 - `.github/workflows/manage-players.yml`
-  Permet d'ajouter, retirer ou lister les joueurs depuis l'interface GitHub Actions.
+  Permet d'ajouter, retirer, renommer ou lister les joueurs depuis l'interface GitHub Actions.
 - `.github/workflows/latest-match.yml`
   Reposte manuellement le dernier match competitif joue par un joueur suivi.
+- `.github/workflows/health.yml`
+  Verifie chaque jour la connexion Turso, HenrikDev et Discord webhook sans poster de message.
 
 ### Gerer les joueurs sans ton PC
 
@@ -117,6 +121,7 @@ Apres le push du repo :
 5. Choisir :
    - `add`
    - `remove`
+   - `rename`
    - `list`
 
 Pour `add`, fournir :
@@ -129,8 +134,11 @@ Pour `add`, fournir :
 
 Riot ne fournit pas de webhook public pour signaler automatiquement la fin d'un match pour ce cas d'usage. Le suivi automatique repose donc sur du polling. La couche provider isole l'acces aux donnees pour pouvoir remplacer HenrikDev plus tard sans rework du scheduler ni du format Discord.
 
+Le poller recupere les 10 derniers matchs competitifs visibles pour chaque joueur suivi, puis poste tous les matchs non encore postes du plus ancien au plus recent. Si un joueur joue plus de 10 matchs competitifs entre deux executions du workflow, les matchs les plus anciens peuvent ne plus etre visibles dans cette fenetre. Dans ce cas, reduire l'intervalle de polling ou utiliser un worker toujours actif.
+
 ## Notes Sur GitHub Actions
 
 - GitHub Actions peut planifier le polling au minimum toutes les 5 minutes. Ce repo utilise 15 minutes pour limiter les appels API et les minutes de runner.
 - Les workflows planifies peuvent etre retardes, surtout au debut de chaque heure. GitHub peut aussi desactiver les workflows planifies sur un repo public inactif depuis 60 jours.
 - Les runners standards sont gratuits sur les repositories publics. Sur un repository prive, les runs consomment le quota gratuit du compte, puis peuvent etre factures selon la configuration de facturation GitHub.
+- Pour quelques joueurs, GitHub Actions toutes les 15 ou 30 minutes suffit generalement. Pour beaucoup de joueurs, des posts quasi instantanes, ou une garantie plus stricte, preferer un worker Node toujours actif chez Fly.io, Railway, Render, ou sur un petit VPS.

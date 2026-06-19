@@ -48,6 +48,18 @@ async function main(): Promise<void> {
         console.log(removed ? `${riotId} a ete retire du suivi.` : `Aucun joueur suivi trouve pour ${riotId} dans ${regionInput}.`);
         break;
       }
+      case "rename-player": {
+        const riotId = process.argv[3];
+        const regionInput = process.argv[4];
+        const displayName = normalizeOptionalText(process.argv[5]);
+        if (!riotId || !regionInput) {
+          throw new Error("Usage : rename-player <name#tag> <region> [displayName]");
+        }
+
+        const renamed = await tracker.renamePlayer(riotId, parseRegion(regionInput), displayName);
+        console.log(renamed ? `${riotId} a ete renomme.` : `Aucun joueur suivi trouve pour ${riotId} dans ${regionInput}.`);
+        break;
+      }
       case "list-players": {
         const players = await tracker.listPlayers();
         if (players.length === 0) {
@@ -82,6 +94,15 @@ async function main(): Promise<void> {
         }
         break;
       }
+      case "health": {
+        const result = await tracker.checkHealth();
+        console.log(`Health check termine. ${result.checkedPlayers} joueur(s) suivi(s).`);
+        if (result.failures.length > 0) {
+          console.error(result.failures.join("\n"));
+          process.exitCode = 1;
+        }
+        break;
+      }
       case "poll": {
         const result = await tracker.pollMatches();
         console.log(`${result.checkedPlayers} joueur(s) verifie(s), ${result.postedMatches} nouveau(x) resume(s) de match envoye(s).`);
@@ -104,10 +125,12 @@ function printUsage(): void {
     "Usage :",
     "  add-player <name#tag> <region> [displayName]",
     "  remove-player <name#tag> <region>",
+    "  rename-player <name#tag> <region> [displayName]",
     "  list-players",
     "  sync",
     "  leaderboard",
     "  latest-match",
+    "  health",
     "  poll"
   ].join("\n"));
 }

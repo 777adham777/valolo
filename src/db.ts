@@ -26,6 +26,10 @@ interface PlayerStateRow {
   updated_at: string;
 }
 
+interface PostedMatchRow {
+  match_id: string;
+}
+
 export class TrackerStore {
   private constructor(private readonly db: Client) {}
 
@@ -95,6 +99,22 @@ export class TrackerStore {
         WHERE game_name = ? AND tag_line = ? AND region = ?
       `,
       args: [gameName, tagLine, region]
+    });
+
+    return Number(result.rowsAffected ?? 0) > 0;
+  }
+
+  public async renameTrackedPlayer(gameName: string, tagLine: string, region: Region, displayName: string | null): Promise<boolean> {
+    const now = new Date().toISOString();
+    const result = await this.db.execute({
+      sql: `
+        UPDATE tracked_players
+        SET
+          display_name = ?,
+          updated_at = ?
+        WHERE game_name = ? AND tag_line = ? AND region = ? AND enabled = 1
+      `,
+      args: [normalizeOptionalText(displayName), now, gameName, tagLine, region]
     });
 
     return Number(result.rowsAffected ?? 0) > 0;
@@ -202,6 +222,44 @@ export class TrackerStore {
     return mapPlayerState(row);
   }
 
+  public async getPostedMatchIds(playerId: number, matchIds: string[]): Promise<Set<string>> {
+    if (matchIds.length === 0) {
+      return new Set();
+    }
+
+    const placeholders = matchIds.map(() => "?").join(", ");
+    const rows = await this.getMany<PostedMatchRow>({
+      sql: `
+        SELECT match_id
+        FROM posted_matches
+        WHERE tracked_player_id = ? AND match_id IN (${placeholders})
+      `,
+      args: [playerId, ...matchIds]
+    });
+
+    return new Set(rows.map((row) => row.match_id));
+  }
+
+  public async markMatchPosted(playerId: number, matchId: string, postedAt: string = new Date().toISOString()): Promise<void> {
+    await this.db.execute({
+      sql: `
+        INSERT INTO posted_matches (
+          tracked_player_id,
+          match_id,
+          posted_at
+        ) VALUES (?, ?, ?)
+        ON CONFLICT(tracked_player_id, match_id) DO NOTHING
+      `,
+      args: [playerId, matchId, postedAt]
+    });
+  }
+
+  public async markMatchesPosted(playerId: number, matchIds: string[], postedAt: string = new Date().toISOString()): Promise<void> {
+    for (const matchId of matchIds) {
+      await this.markMatchPosted(playerId, matchId, postedAt);
+    }
+  }
+
   public async getLeaderboardEntries(): Promise<LeaderboardEntry[]> {
     const rows = await this.getMany<Record<string, unknown>>(`
       SELECT
@@ -271,6 +329,15 @@ export class TrackerStore {
             last_processed_match_id TEXT,
             last_checked_at TEXT,
             updated_at TEXT NOT NULL,
+            FOREIGN KEY(tracked_player_id) REFERENCES tracked_players(id) ON DELETE CASCADE
+          )
+        `,
+        `
+          CREATE TABLE IF NOT EXISTS posted_matches (
+            tracked_player_id INTEGER NOT NULL,
+            match_id TEXT NOT NULL,
+            posted_at TEXT NOT NULL,
+            PRIMARY KEY(tracked_player_id, match_id),
             FOREIGN KEY(tracked_player_id) REFERENCES tracked_players(id) ON DELETE CASCADE
           )
         `

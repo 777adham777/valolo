@@ -10,6 +10,7 @@ on:
         options:
           - add
           - remove
+          - rename
           - list
       riot_id:
         description: "Riot ID, par exemple TenZ#NA1"
@@ -20,7 +21,7 @@ on:
         required: false
         type: string
       display_name:
-        description: "Nom affiche optionnel a l'ajout"
+        description: "Nom affiche optionnel a l'ajout ou au renommage"
         required: false
         type: string
 
@@ -43,7 +44,7 @@ jobs:
       - name: Installer les dependances
         run: npm ci
 
-      - name: Valider les entrees add/remove
+      - name: Valider les entrees add/remove/rename
         if: ${{ inputs.action != 'list' }}
         shell: bash
         env:
@@ -51,7 +52,7 @@ jobs:
           REGION: ${{ inputs.region }}
         run: |
           if [ -z "$RIOT_ID" ] || [ -z "$REGION" ]; then
-            echo "riot_id and region are required for add/remove" >&2
+            echo "riot_id and region are required for add/remove/rename" >&2
             exit 1
           fi
 
@@ -74,6 +75,19 @@ jobs:
         env:
           RIOT_ID: ${{ inputs.riot_id }}
           REGION: ${{ inputs.region }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          LEADERBOARD_TIMEZONE: Europe/Paris
+
+      - name: Renommer un joueur
+        if: ${{ inputs.action == 'rename' }}
+        run: npm run tracker:rename-player -- "$RIOT_ID" "$REGION" "$DISPLAY_NAME"
+        env:
+          RIOT_ID: ${{ inputs.riot_id }}
+          REGION: ${{ inputs.region }}
+          DISPLAY_NAME: ${{ inputs.display_name }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}

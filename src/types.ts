@@ -78,10 +78,12 @@ export interface TrackerProvider {
   resolvePlayer(riotId: string, region: Region): Promise<ResolvedPlayer>;
   getPlayerSnapshot(player: PlayerIdentity): Promise<PlayerSnapshot>;
   getLatestCompetitiveMatch(player: PlayerIdentity): Promise<MatchSummary | null>;
+  getRecentCompetitiveMatches(player: PlayerIdentity, limit: number): Promise<MatchSummary[]>;
 }
 
 export interface DiscordWebhookClient {
   postMessage(payload: DiscordWebhookPayload): Promise<void>;
+  checkConnection(): Promise<void>;
 }
 
 export interface DiscordWebhookPayload {

@@ -11,6 +11,8 @@ import type {
 import { TrackerStore } from "./db.js";
 
 export class TrackerService {
+  private static readonly MATCH_SCAN_LIMIT = 10;
+
   public constructor(
     private readonly store: TrackerStore,
     private readonly provider: TrackerProvider,
@@ -29,11 +31,13 @@ export class TrackerService {
 
     const identity = playerToIdentity(player);
     const snapshot = await this.provider.getPlayerSnapshot(identity);
-    const latestMatch = await this.provider.getLatestCompetitiveMatch(identity);
+    const recentMatches = await this.provider.getRecentCompetitiveMatches(identity, TrackerService.MATCH_SCAN_LIMIT);
+    const latestMatch = recentMatches[0] ?? null;
 
     await this.store.updatePlayerSnapshot(player.id, snapshot, {
       lastProcessedMatchId: latestMatch?.matchId ?? null
     });
+    await this.store.markMatchesPosted(player.id, recentMatches.map((match) => match.matchId));
   }
 
   public async removePlayer(riotId: string, region: Region): Promise<boolean> {
@@ -43,6 +47,15 @@ export class TrackerService {
     }
 
     return this.store.removeTrackedPlayer(gameName, tagLine, region);
+  }
+
+  public async renamePlayer(riotId: string, region: Region, displayName: string | null): Promise<boolean> {
+    const [gameName, tagLine, ...rest] = riotId.split("#");
+    if (!gameName || !tagLine || rest.length > 0) {
+      throw new Error(`Riot ID invalide "${riotId}". Format attendu : "<nom>#<tag>"`);
+    }
+
+    return this.store.renameTrackedPlayer(gameName, tagLine, region, displayName);
   }
 
   public async listPlayers(): Promise<string[]> {
@@ -131,6 +144,33 @@ export class TrackerService {
     return { posted: true, failures };
   }
 
+  public async checkHealth(): Promise<{ checkedPlayers: number; failures: string[] }> {
+    const failures: string[] = [];
+    const players = await this.store.listTrackedPlayers();
+
+    try {
+      await this.webhook.checkConnection();
+    } catch (error) {
+      failures.push(`Discord webhook: ${formatError(error)}`);
+    }
+
+    if (players.length > 0) {
+      const player = players[0]!;
+      try {
+        const identity = playerToIdentity(player);
+        await this.provider.getPlayerSnapshot(identity);
+        await this.provider.getRecentCompetitiveMatches(identity, 1);
+      } catch (error) {
+        failures.push(`${player.displayName ?? `${player.gameName}#${player.tagLine}`}: ${formatError(error)}`);
+      }
+    }
+
+    return {
+      checkedPlayers: players.length,
+      failures
+    };
+  }
+
   public async pollMatches(): Promise<{
     checkedPlayers: number;
     postedMatches: number;
@@ -146,29 +186,45 @@ export class TrackerService {
       try {
         const identity = playerToIdentity(player);
         const stateBefore = await this.store.getPlayerState(player.id);
-        const latestMatch = await this.provider.getLatestCompetitiveMatch(identity);
+        const recentMatches = await this.provider.getRecentCompetitiveMatches(identity, TrackerService.MATCH_SCAN_LIMIT);
 
-        if (!latestMatch) {
+        if (recentMatches.length === 0) {
           continue;
         }
 
-        if (latestMatch.matchId === stateBefore.lastProcessedMatchId) {
+        const latestMatch = recentMatches[0]!;
+        const candidateMatches = getMatchesNewerThanLastProcessed(recentMatches, stateBefore.lastProcessedMatchId);
+        if (candidateMatches.length === 0) {
+          await this.store.markMatchPosted(player.id, latestMatch.matchId);
+          continue;
+        }
+
+        const postedMatchIds = await this.store.getPostedMatchIds(player.id, candidateMatches.map((match) => match.matchId));
+        const matchesToPost = candidateMatches
+          .filter((match) => !postedMatchIds.has(match.matchId))
+          .sort(compareMatchDatesAscending);
+
+        if (matchesToPost.length === 0) {
+          await this.store.updateLastProcessedMatchId(player.id, latestMatch.matchId);
           continue;
         }
 
         const snapshotAfter = await this.provider.getPlayerSnapshot(identity);
-        const post = buildMatchPost(
-          player.displayName ?? `${player.gameName}#${player.tagLine}`,
-          latestMatch,
-          stateBefore,
-          snapshotAfter
-        );
+        const displayName = player.displayName ?? `${player.gameName}#${player.tagLine}`;
 
-        await this.webhook.postMessage(formatMatchSummary(post));
+        for (const match of matchesToPost) {
+          const post = match.matchId === latestMatch.matchId
+            ? buildMatchPost(displayName, match, stateBefore, snapshotAfter)
+            : buildMatchPost(displayName, match, stateBefore, { ...snapshotAfter, lastRrChange: null }, { allowFallbackRrDelta: false });
+
+          await this.webhook.postMessage(formatMatchSummary(post));
+          await this.store.markMatchPosted(player.id, match.matchId);
+          postedMatches += 1;
+        }
+
         await this.store.updatePlayerSnapshot(player.id, snapshotAfter, {
           lastProcessedMatchId: latestMatch.matchId
         });
-        postedMatches += 1;
       } catch (error) {
         failures.push(`${player.displayName ?? `${player.gameName}#${player.tagLine}`}: ${formatError(error)}`);
       }
@@ -216,9 +272,13 @@ function buildMatchPost(
     rankTier: number | null;
     rankingInTier: number | null;
   },
-  snapshotAfter: PlayerSnapshot
+  snapshotAfter: PlayerSnapshot,
+  options: {
+    allowFallbackRrDelta?: boolean;
+  } = {}
 ): MatchSummaryPost {
-  const fallbackRrDelta = snapshotBefore.rankTier !== null
+  const fallbackRrDelta = options.allowFallbackRrDelta !== false
+    && snapshotBefore.rankTier !== null
     && snapshotAfter.rankTier !== null
     && snapshotBefore.rankTier === snapshotAfter.rankTier
     && snapshotBefore.rankingInTier !== null
@@ -241,4 +301,22 @@ function compareMatchDates(left: string | null, right: string | null): number {
   const leftTime = left ? Date.parse(left) : Number.NEGATIVE_INFINITY;
   const rightTime = right ? Date.parse(right) : Number.NEGATIVE_INFINITY;
   return leftTime - rightTime;
+}
+
+function compareMatchDatesAscending(left: { startedAt: string | null }, right: { startedAt: string | null }): number {
+  const delta = compareMatchDates(left.startedAt, right.startedAt);
+  return delta !== 0 ? delta : 0;
+}
+
+function getMatchesNewerThanLastProcessed<T extends { matchId: string }>(matchesNewestFirst: T[], lastProcessedMatchId: string | null): T[] {
+  if (lastProcessedMatchId === null) {
+    return matchesNewestFirst;
+  }
+
+  const lastProcessedIndex = matchesNewestFirst.findIndex((match) => match.matchId === lastProcessedMatchId);
+  if (lastProcessedIndex === -1) {
+    return matchesNewestFirst;
+  }
+
+  return matchesNewestFirst.slice(0, lastProcessedIndex);
 }
