@@ -93,6 +93,17 @@ describe("TrackerService", () => {
     expect(state.lastProcessedMatchId).toBe("match-1");
   });
 
+  it("falls back to riot id display when display name is blank", async () => {
+    const { service, store } = createHarness();
+    const tracker = await service;
+    const db = await store;
+
+    await tracker.addPlayer("Input#Tag", "eu", "   ");
+
+    const entries = await db.getLeaderboardEntries();
+    expect(entries[0]?.displayName).toBe("Demo#EUW");
+  });
+
   it("does not post when the latest competitive match is unchanged", async () => {
     const { service, provider, webhook } = createHarness();
     const tracker = await service;

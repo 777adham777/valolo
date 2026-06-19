@@ -61,6 +61,7 @@ export class TrackerStore {
     displayName: string | null;
   }): Promise<TrackedPlayer> {
     const now = new Date().toISOString();
+    const normalizedDisplayName = normalizeOptionalText(input.displayName);
     const row = await this.getOne<PlayerRow>({
       sql: `
         INSERT INTO tracked_players (
@@ -80,7 +81,7 @@ export class TrackerStore {
           updated_at = excluded.updated_at
         RETURNING *
       `,
-      args: [input.gameName, input.tagLine, input.region, input.puuid, input.displayName, now, now]
+      args: [input.gameName, input.tagLine, input.region, input.puuid, normalizedDisplayName, now, now]
     });
 
     await this.ensurePlayerState(row.id);
@@ -104,7 +105,7 @@ export class TrackerStore {
       SELECT *
       FROM tracked_players
       WHERE enabled = 1
-      ORDER BY COALESCE(display_name, game_name), tag_line
+      ORDER BY COALESCE(NULLIF(display_name, ''), game_name), tag_line
     `);
 
     return rows.map(mapPlayer);
@@ -205,7 +206,7 @@ export class TrackerStore {
     const rows = await this.getMany<Record<string, unknown>>(`
       SELECT
         tp.id AS player_id,
-        COALESCE(tp.display_name, tp.game_name || '#' || tp.tag_line) AS display_name,
+        COALESCE(NULLIF(tp.display_name, ''), tp.game_name || '#' || tp.tag_line) AS display_name,
         ps.rank_tier AS rank_tier,
         ps.rank_name AS rank_name,
         ps.ranking_in_tier AS ranking_in_tier,
@@ -336,4 +337,13 @@ function mapPlayerState(row: PlayerStateRow): PlayerState {
 
 function mapRow<T extends object>(row: ResultSet["rows"][number]): T {
   return Object.fromEntries(Object.entries(row)) as T;
+}
+
+function normalizeOptionalText(value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }

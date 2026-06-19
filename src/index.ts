@@ -28,7 +28,7 @@ async function main(): Promise<void> {
       case "add-player": {
         const riotId = process.argv[3];
         const regionInput = process.argv[4];
-        const displayName = process.argv[5] ?? null;
+        const displayName = normalizeOptionalText(process.argv[5]);
         if (!riotId || !regionInput) {
           throw new Error("Usage: add-player <name#tag> <region> [displayName]");
         }
@@ -101,6 +101,15 @@ function printUsage(): void {
     "  leaderboard",
     "  poll"
   ].join("\n"));
+}
+
+function normalizeOptionalText(value: string | undefined): string | null {
+  if (value === undefined) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 main().catch((error) => {
