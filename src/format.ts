@@ -2,49 +2,45 @@ import type { DiscordWebhookPayload, LeaderboardEntry, MatchSummaryPost } from "
 
 export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPayload;
 export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPayload {
-  if (entries.length === 0) {
+  const sortedEntries = [...entries].sort(compareLeaderboardEntries);
+
+  if (sortedEntries.length === 0) {
     return {
       embeds: [
         {
-          title: "Classement Valorant Quotidien",
+          author: {
+            name: "VALOLO"
+          },
+          title: "Leaderboard Quotidien",
           description: "Aucun joueur suivi pour le moment.",
-          color: 0xe67e22,
+          color: 0x5865f2,
           footer: {
-            text: "Mise a jour quotidienne des joueurs suivis"
+            text: "Aujourdhui"
           }
         }
       ]
     };
   }
 
-  const podium = entries
-    .slice(0, 3)
-    .map((entry, index) => `${getPlacementLabel(index)} **${entry.displayName}**\n${formatRank(entry)}\n${formatWinRate(entry)}`)
-    .join("\n\n");
-
-  const tableLines = [
-    `${padRight("#", 4)}${padRight("Joueur", 16)}${padRight("Rang", 24)}WR`,
-    ...entries.map((entry, index) => {
-      const placement = String(index + 1);
-      const player = truncate(entry.displayName, 15);
-      const rank = truncate(formatRank(entry), 23);
-      const winRate = formatWinRate(entry);
-
-      return `${padRight(placement, 4)}${padRight(player, 16)}${padRight(rank, 24)}${winRate}`;
+  const description = sortedEntries
+    .map((entry, index) => {
+      const titleLine = `**${index + 1} - ${entry.displayName}**`;
+      const subtitleLine = `${formatRank(entry)} | ${formatWinRate(entry)}`;
+      return `${titleLine}\n${subtitleLine}`;
     })
-  ];
-
-  const tableFields = splitTableIntoFields(tableLines);
+    .join("\n\n");
 
   return {
     embeds: [
       {
-        title: "Classement Valorant Quotidien",
-        description: `**Podium**\n${podium}`,
-        color: 0xe67e22,
-        fields: tableFields,
+        author: {
+          name: "VALOLO"
+        },
+        title: "Leaderboard Quotidien",
+        description,
+        color: 0x5865f2,
         footer: {
-          text: `${entries.length} joueur(s) suivi(s)`
+          text: "Aujourdhui"
         }
       }
     ]
@@ -133,23 +129,7 @@ function formatWinRate(entry: LeaderboardEntry): string {
 }
 
 function formatRank(entry: LeaderboardEntry): string {
-  return entry.rankName ? `${entry.rankName}${entry.rankingInTier !== null ? ` ${entry.rankingInTier}RR` : ""}` : "Non classe";
-}
-
-function getPlacementLabel(index: number): string {
-  if (index === 0) {
-    return "[TOP 1]";
-  }
-
-  if (index === 1) {
-    return "[TOP 2]";
-  }
-
-  if (index === 2) {
-    return "[TOP 3]";
-  }
-
-  return `#${index + 1}`;
+  return entry.rankName ? `${entry.rankName.toUpperCase()}${entry.rankingInTier !== null ? ` - ${entry.rankingInTier} RR` : ""}` : "NON CLASSE";
 }
 
 function formatDuration(gameLengthInMs: number | null): string {
@@ -163,46 +143,16 @@ function formatDuration(gameLengthInMs: number | null): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-function splitTableIntoFields(lines: string[]): Array<Record<string, unknown>> {
-  const fields: Array<Record<string, unknown>> = [];
-  let currentChunk: string[] = [];
-
-  for (const line of lines) {
-    const candidate = currentChunk.length === 0
-      ? `\`\`\`\n${line}\n\`\`\``
-      : `\`\`\`\n${currentChunk.join("\n")}\n${line}\n\`\`\``;
-
-    if (candidate.length > 1024 && currentChunk.length > 0) {
-      fields.push({
-        name: fields.length === 0 ? "Classement" : "Suite",
-        value: `\`\`\`\n${currentChunk.join("\n")}\n\`\`\``,
-        inline: false
-      });
-      currentChunk = [line];
-    } else {
-      currentChunk.push(line);
-    }
+function compareLeaderboardEntries(left: LeaderboardEntry, right: LeaderboardEntry): number {
+  const rankDelta = (right.rankTier ?? -1) - (left.rankTier ?? -1);
+  if (rankDelta !== 0) {
+    return rankDelta;
   }
 
-  if (currentChunk.length > 0) {
-    fields.push({
-      name: fields.length === 0 ? "Classement" : "Suite",
-      value: `\`\`\`\n${currentChunk.join("\n")}\n\`\`\``,
-      inline: false
-    });
+  const winRateDelta = (right.winRate ?? -1) - (left.winRate ?? -1);
+  if (winRateDelta !== 0) {
+    return winRateDelta;
   }
 
-  return fields;
-}
-
-function padRight(value: string, length: number): string {
-  return value.padEnd(length, " ");
-}
-
-function truncate(value: string, maxLength: number): string {
-  if (value.length <= maxLength) {
-    return value;
-  }
-
-  return `${value.slice(0, Math.max(maxLength - 1, 1))}…`;
+  return left.displayName.localeCompare(right.displayName);
 }
