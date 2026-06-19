@@ -2,7 +2,8 @@ name: Verifier Les Matchs Valorant
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/15 * * * *"
+      timezone: "Europe/Paris"
   workflow_dispatch:
 
 permissions:

@@ -170,9 +170,9 @@ export class TrackerStore {
         snapshot.rankTier,
         snapshot.rankName,
         snapshot.rankingInTier,
-        snapshot.wins,
-        snapshot.games,
-        snapshot.winRate,
+        null,
+        null,
+        null,
         options.lastProcessedMatchId ?? null,
         options.lastCheckedAt ?? now,
         now,
@@ -209,16 +209,13 @@ export class TrackerStore {
         COALESCE(NULLIF(tp.display_name, ''), tp.game_name || '#' || tp.tag_line) AS display_name,
         ps.rank_tier AS rank_tier,
         ps.rank_name AS rank_name,
-        ps.ranking_in_tier AS ranking_in_tier,
-        ps.win_rate AS win_rate,
-        ps.wins AS wins,
-        ps.games AS games
+        ps.ranking_in_tier AS ranking_in_tier
       FROM tracked_players tp
       INNER JOIN player_state ps ON ps.tracked_player_id = tp.id
       WHERE tp.enabled = 1
       ORDER BY
         COALESCE(ps.rank_tier, -1) DESC,
-        COALESCE(ps.win_rate, -1) DESC,
+        COALESCE(ps.ranking_in_tier, -1) DESC,
         display_name ASC
     `);
 
@@ -227,10 +224,7 @@ export class TrackerStore {
       displayName: String(typed.display_name),
       rankTier: typed.rank_tier === null ? null : Number(typed.rank_tier),
       rankName: typed.rank_name === null ? null : String(typed.rank_name),
-      rankingInTier: typed.ranking_in_tier === null ? null : Number(typed.ranking_in_tier),
-      winRate: typed.win_rate === null ? null : Number(typed.win_rate),
-      wins: typed.wins === null ? null : Number(typed.wins),
-      games: typed.games === null ? null : Number(typed.games)
+      rankingInTier: typed.ranking_in_tier === null ? null : Number(typed.ranking_in_tier)
     }));
   }
 

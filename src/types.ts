@@ -40,9 +40,7 @@ export interface PlayerSnapshot {
   rankTier: number | null;
   rankName: string | null;
   rankingInTier: number | null;
-  wins: number | null;
-  games: number | null;
-  winRate: number | null;
+  lastRrChange: number | null;
 }
 
 export interface MatchSummary {
@@ -74,9 +72,6 @@ export interface LeaderboardEntry {
   rankTier: number | null;
   rankName: string | null;
   rankingInTier: number | null;
-  winRate: number | null;
-  wins: number | null;
-  games: number | null;
 }
 
 export interface TrackerProvider {

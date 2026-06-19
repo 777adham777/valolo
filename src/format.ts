@@ -15,7 +15,7 @@ export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPa
           description: "Aucun joueur suivi pour le moment.",
           color: 0x5865f2,
           footer: {
-            text: "Aujourdhui"
+            text: "Aujourd'hui"
           }
         }
       ]
@@ -24,8 +24,8 @@ export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPa
 
   const description = sortedEntries
     .map((entry, index) => {
-      const titleLine = `**${index + 1} - ${formatRankPrefix(entry)} ${entry.displayName}**`;
-      const subtitleLine = `${formatRank(entry)} | ${formatWinRate(entry)}`;
+      const titleLine = `**${index + 1} - ${entry.displayName}**`;
+      const subtitleLine = formatRank(entry);
       return `${titleLine}\n${subtitleLine}`;
     })
     .join("\n\n");
@@ -40,7 +40,7 @@ export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPa
         description,
         color: 0x5865f2,
         footer: {
-          text: "Aujourdhui"
+          text: "Aujourd'hui"
         }
       }
     ]
@@ -118,64 +118,8 @@ function formatRrDelta(delta: number | null): string | null {
   return `${delta}`;
 }
 
-function formatWinRate(entry: LeaderboardEntry): string {
-  if (entry.winRate === null || entry.games === null || entry.wins === null) {
-    return "N/A";
-  }
-
-  const losses = Math.max(entry.games - entry.wins, 0);
-  const roundedWinRate = Number.isInteger(entry.winRate) ? `${entry.winRate}` : entry.winRate.toFixed(1);
-  return `${roundedWinRate}%WR | ${entry.wins}-${losses}`;
-}
-
 function formatRank(entry: LeaderboardEntry): string {
   return entry.rankName ? `${entry.rankName.toUpperCase()}${entry.rankingInTier !== null ? ` - ${entry.rankingInTier} RR` : ""}` : "NON CLASSE";
-}
-
-function formatRankPrefix(entry: LeaderboardEntry): string {
-  const tier = entry.rankTier ?? 0;
-
-  if (tier >= 27) {
-    return "[R]";
-  }
-
-  if (tier >= 24) {
-    return "[I]";
-  }
-
-  if (tier >= 21) {
-    return "[A]";
-  }
-
-  if (tier >= 18) {
-    return "[D]";
-  }
-
-  if (tier >= 15) {
-    return "[P]";
-  }
-
-  if (tier >= 12) {
-    return "[G]";
-  }
-
-  if (tier >= 9) {
-    return "[S]";
-  }
-
-  if (tier >= 6) {
-    return "[B]";
-  }
-
-  if (tier >= 3) {
-    return "[F]";
-  }
-
-  if (tier > 0) {
-    return "[?]";
-  }
-
-  return "[NC]";
 }
 
 function formatDuration(gameLengthInMs: number | null): string {
@@ -195,9 +139,9 @@ function compareLeaderboardEntries(left: LeaderboardEntry, right: LeaderboardEnt
     return rankDelta;
   }
 
-  const winRateDelta = (right.winRate ?? -1) - (left.winRate ?? -1);
-  if (winRateDelta !== 0) {
-    return winRateDelta;
+  const rrDelta = (right.rankingInTier ?? -1) - (left.rankingInTier ?? -1);
+  if (rrDelta !== 0) {
+    return rrDelta;
   }
 
   return left.displayName.localeCompare(right.displayName);

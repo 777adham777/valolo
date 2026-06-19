@@ -31,9 +31,7 @@ class FakeProvider implements TrackerProvider {
     rankTier: 12,
     rankName: "Gold 1",
     rankingInTier: 42,
-    wins: 8,
-    games: 10,
-    winRate: 80
+    lastRrChange: null
   };
   public snapshotsByPuuid: Map<string, PlayerSnapshot> = new Map();
 
@@ -115,7 +113,8 @@ describe("TrackerService", () => {
 
     provider.snapshot = {
       ...provider.snapshot,
-      rankingInTier: 55
+      rankingInTier: 55,
+      lastRrChange: 15
     };
 
     const result = await tracker.pollMatches();
@@ -132,9 +131,7 @@ describe("TrackerService", () => {
       rankTier: 12,
       rankName: "Gold 1",
       rankingInTier: 40,
-      wins: 8,
-      games: 10,
-      winRate: 80
+      lastRrChange: null
     };
     await tracker.addPlayer("Input#Tag", "eu");
 
@@ -143,15 +140,16 @@ describe("TrackerService", () => {
       rankTier: 12,
       rankName: "Gold 1",
       rankingInTier: 61,
-      wins: 9,
-      games: 11,
-      winRate: 81.8
+      lastRrChange: 21
     };
 
     const result = await tracker.pollMatches();
 
     expect(result.postedMatches).toBe(1);
     expect(webhook.payloads).toHaveLength(1);
+    const embed = webhook.payloads[0]?.embeds?.[0] as Record<string, unknown>;
+    const fields = embed.fields as Array<Record<string, unknown>>;
+    expect(fields.find((field) => field.name === "RR")?.value).toBe("+21 RR");
 
     const player = (await db.listTrackedPlayers())[0]!;
     const state = await db.getPlayerState(player.id);
@@ -184,9 +182,7 @@ describe("TrackerService", () => {
       rankTier: 15,
       rankName: "Platinum 1",
       rankingInTier: 12,
-      wins: 10,
-      games: 14,
-      winRate: 71.4
+      lastRrChange: null
     };
 
     const result = await tracker.pollMatches();
@@ -225,37 +221,40 @@ describe("TrackerService", () => {
 });
 
 describe("formatters", () => {
-  it("sorts leaderboard entries consistently and renders french rank plus winrate", () => {
+  it("sorts leaderboard entries by rank and RR and renders rank-only rows", () => {
     const payload = formatLeaderboard([
       {
         playerId: 1,
-        displayName: "Lower",
-        rankTier: 10,
-        rankName: "Silver 3",
-        rankingInTier: 85,
-        winRate: 60,
-        wins: 6,
-        games: 10
+        displayName: "SameRankHigherRR",
+        rankTier: 12,
+        rankName: "Gold 1",
+        rankingInTier: 85
       },
       {
         playerId: 2,
         displayName: "Higher",
+        rankTier: 13,
+        rankName: "Gold 2",
+        rankingInTier: 40
+      },
+      {
+        playerId: 3,
+        displayName: "SameRankLowerRR",
         rankTier: 12,
         rankName: "Gold 1",
-        rankingInTier: 40,
-        winRate: 55.6,
-        wins: 5,
-        games: 9
+        rankingInTier: 20
       }
     ]);
 
     const embed = payload.embeds?.[0] as Record<string, unknown>;
     const description = String(embed.description);
     expect(String(embed.title)).toContain("Leaderboard Quotidien");
-    expect(description).toContain("1 - [G] Higher");
-    expect(description).toContain("Higher");
-    expect(description).toContain("GOLD 1 - 40 RR");
-    expect(description).toContain("55.6%WR | 5-4");
+    expect(description).toContain("1 - Higher");
+    expect(description).toContain("GOLD 2 - 40 RR");
+    expect(description).toContain("2 - SameRankHigherRR");
+    expect(description).toContain("3 - SameRankLowerRR");
+    expect(description).not.toContain("%WR");
+    expect(description).not.toContain("[G]");
   });
 
   it("renders compact match card with portrait and essential stats", () => {
@@ -292,37 +291,20 @@ describe("formatters", () => {
 });
 
 describe("HenrikDevProvider", () => {
-  it("reads current rank and latest valid season stats from henrik payloads", async () => {
+  it("reads current rank and RR delta from the current HenrikDev MMR payload", async () => {
     const responses = [
       {
         status: 200,
         data: {
-          current_data: {
-            currenttier: 16,
-            currenttierpatched: "Platinum 2",
-            ranking_in_tier: 60
+          current: {
+            tier: {
+              id: 16,
+              name: "Platinum 2"
+            },
+            rr: 60,
+            last_change: 18
           }
         }
-      },
-      {
-        status: 200,
-        data: [
-          createApiMatch("867e1d40-64ba-5da0-9e6c-dec45f2fcfa3", {
-            matchId: "m1",
-            seasonShort: "e11a3",
-            didWin: true
-          }),
-          createApiMatch("867e1d40-64ba-5da0-9e6c-dec45f2fcfa3", {
-            matchId: "m2",
-            seasonShort: "e11a3",
-            didWin: true
-          }),
-          createApiMatch("867e1d40-64ba-5da0-9e6c-dec45f2fcfa3", {
-            matchId: "m3",
-            seasonShort: "e11a3",
-            didWin: false
-          })
-        ]
       }
     ];
 
@@ -345,70 +327,7 @@ describe("HenrikDevProvider", () => {
 
     expect(snapshot.rankName).toBe("Platinum 2");
     expect(snapshot.rankingInTier).toBe(60);
-    expect(snapshot.wins).toBe(2);
-    expect(snapshot.games).toBe(3);
-    expect(snapshot.winRate).toBe(66.7);
-  });
-
-  it("computes current-season stats from competitive match history and ignores older seasons", async () => {
-    const responses = [
-      {
-        status: 200,
-        data: {
-          current_data: {
-            currenttier: 16,
-            currenttierpatched: "Platinum 2",
-            ranking_in_tier: 24
-          }
-        }
-      },
-      {
-        status: 200,
-        data: [
-          createApiMatch("98e2cf2f-95f3-5a56-8d92-6b48c93ab8d6", {
-            matchId: "m1",
-            seasonShort: "e11a3",
-            didWin: true
-          }),
-          createApiMatch("98e2cf2f-95f3-5a56-8d92-6b48c93ab8d6", {
-            matchId: "m2",
-            seasonShort: "e11a3",
-            didWin: false
-          }),
-          createApiMatch("98e2cf2f-95f3-5a56-8d92-6b48c93ab8d6", {
-            matchId: "m3",
-            seasonShort: "e11a3",
-            didWin: true
-          }),
-          createApiMatch("98e2cf2f-95f3-5a56-8d92-6b48c93ab8d6", {
-            matchId: "old",
-            seasonShort: "e10a3",
-            didWin: false
-          })
-        ]
-      }
-    ];
-
-    const provider = new HenrikDevProvider({
-      apiKey: "test-key",
-      fetchImpl: async () => new Response(JSON.stringify(responses.shift()), {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json"
-        }
-      })
-    });
-
-    const snapshot = await provider.getPlayerSnapshot({
-      gameName: "2noteszer",
-      tagLine: "3291",
-      region: "eu",
-      puuid: "98e2cf2f-95f3-5a56-8d92-6b48c93ab8d6"
-    });
-
-    expect(snapshot.wins).toBe(2);
-    expect(snapshot.games).toBe(3);
-    expect(snapshot.winRate).toBe(66.7);
+    expect(snapshot.lastRrChange).toBe(18);
   });
 });
 

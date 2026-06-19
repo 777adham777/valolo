@@ -14,9 +14,6 @@ interface HenrikDevClientOptions {
 }
 
 export class HenrikDevProvider implements TrackerProvider {
-  private static readonly MATCH_PAGE_SIZE = 20;
-  private static readonly MATCH_PAGE_LIMIT = 10;
-
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
@@ -45,95 +42,30 @@ export class HenrikDevProvider implements TrackerProvider {
   }
 
   public async getPlayerSnapshot(player: PlayerIdentity): Promise<PlayerSnapshot> {
-    const response = await this.getJson(`/valorant/v2/by-puuid/mmr/${encodeURIComponent(player.region)}/${encodeURIComponent(player.puuid)}`);
+    const response = await this.getJson(`/valorant/v3/by-puuid/mmr/${encodeURIComponent(player.region)}/pc/${encodeURIComponent(player.puuid)}`);
     const data = expectObject(response.data, "mmr data");
-    const currentData = expectObject(data.current_data, "mmr current_data");
-    const matchStats = await this.getCurrentSeasonCompetitiveStats(player);
+    const currentData = expectObject(data.current, "mmr current");
+    const tier = expectObject(currentData.tier, "mmr current tier");
 
     return {
-      rankTier: readOptionalNumber(currentData.currenttier),
-      rankName: readOptionalString(currentData.currenttierpatched),
-      rankingInTier: readOptionalNumber(currentData.ranking_in_tier),
-      wins: matchStats.wins,
-      games: matchStats.games,
-      winRate: matchStats.winRate
+      rankTier: readOptionalNumber(tier.id),
+      rankName: readOptionalString(tier.name),
+      rankingInTier: readOptionalNumber(currentData.rr),
+      lastRrChange: readOptionalNumber(currentData.last_change)
     };
   }
 
   public async getLatestCompetitiveMatch(player: PlayerIdentity): Promise<MatchSummary | null> {
-    const matches = await this.getCompetitiveMatchesPage(player, 1, 1);
+    const matches = await this.getCompetitiveMatches(player, 1);
     return matches[0] ?? null;
   }
 
-  private async getCurrentSeasonCompetitiveStats(player: PlayerIdentity): Promise<{
-    wins: number | null;
-    games: number | null;
-    winRate: number | null;
-  }> {
-    const firstPageMatches = await this.getCompetitiveMatchesPage(player, 1, HenrikDevProvider.MATCH_PAGE_SIZE);
-    const latestMatch = firstPageMatches[0];
-
-    if (!latestMatch?.seasonShort) {
-      return {
-        wins: null,
-        games: null,
-        winRate: null
-      };
-    }
-
-    const currentSeason = latestMatch.seasonShort;
-    let wins = 0;
-    let losses = 0;
-
-    for (let page = 1; page <= HenrikDevProvider.MATCH_PAGE_LIMIT; page += 1) {
-      const matches = page === 1
-        ? firstPageMatches
-        : await this.getCompetitiveMatchesPage(player, page, HenrikDevProvider.MATCH_PAGE_SIZE);
-
-      if (matches.length === 0) {
-        break;
-      }
-
-      let foundCurrentSeasonInPage = false;
-
-      for (const match of matches) {
-        if (match.seasonShort !== currentSeason) {
-          continue;
-        }
-
-        foundCurrentSeasonInPage = true;
-
-        if (match.didWin === true) {
-          wins += 1;
-        } else if (match.didWin === false) {
-          losses += 1;
-        }
-      }
-
-      if (!foundCurrentSeasonInPage) {
-        break;
-      }
-
-      if (matches.length < HenrikDevProvider.MATCH_PAGE_SIZE) {
-        break;
-      }
-    }
-
-    const games = wins + losses;
-    return {
-      wins,
-      games,
-      winRate: games > 0 ? Number(((wins / games) * 100).toFixed(1)) : 0
-    };
-  }
-
-  private async getCompetitiveMatchesPage(
+  private async getCompetitiveMatches(
     player: PlayerIdentity,
-    page: number,
     size: number
   ): Promise<MatchSummary[]> {
     const response = await this.getJson(
-      `/valorant/v4/by-puuid/matches/${encodeURIComponent(player.region)}/pc/${encodeURIComponent(player.puuid)}?mode=competitive&size=${size}&page=${page}`
+      `/valorant/v4/by-puuid/matches/${encodeURIComponent(player.region)}/pc/${encodeURIComponent(player.puuid)}?mode=competitive&size=${size}`
     );
 
     const matches = expectArray(response.data, "matches");

@@ -4,7 +4,7 @@ Worker leger pour Discord qui suit les joueurs Valorant, publie un classement qu
 
 ## Fonctionnalites
 
-- Classement quotidien avec pseudo, rang actuel, RR et winrate competitif
+- Classement quotidien avec pseudo, rang actuel et RR
 - Verification automatique des matchs competitifs avec dedupe stricte sur le dernier match traite
 - Resume de match avec evolution de rang/RR
 - Stockage persistant via Turso
@@ -69,7 +69,7 @@ Worker leger pour Discord qui suit les joueurs Valorant, publie un classement qu
 - `npm run tracker:latest-match`
 - `npm run tracker:sync`
 
-`sync` met a jour les snapshots de rang et de winrate sans poster sur Discord.
+`sync` met a jour les snapshots de rang sans poster sur Discord.
 
 ## Hebergement Gratuit
 
@@ -98,9 +98,9 @@ References officielles :
 ### Workflows GitHub
 
 - `.github/workflows/poll.yml`
-  Verifie les nouveaux matchs toutes les 5 minutes.
+  Verifie les nouveaux matchs toutes les 15 minutes.
 - `.github/workflows/leaderboard.yml`
-  Envoie le classement quotidien.
+  Envoie le classement quotidien a 19:00 Europe/Paris.
 - `.github/workflows/manage-players.yml`
   Permet d'ajouter, retirer ou lister les joueurs depuis l'interface GitHub Actions.
 - `.github/workflows/latest-match.yml`
@@ -128,3 +128,9 @@ Pour `add`, fournir :
 ## Notes Sur Le Tracking Riot
 
 Riot ne fournit pas de webhook public pour signaler automatiquement la fin d'un match pour ce cas d'usage. Le suivi automatique repose donc sur du polling. La couche provider isole l'acces aux donnees pour pouvoir remplacer HenrikDev plus tard sans rework du scheduler ni du format Discord.
+
+## Notes Sur GitHub Actions
+
+- GitHub Actions peut planifier le polling au minimum toutes les 5 minutes. Ce repo utilise 15 minutes pour limiter les appels API et les minutes de runner.
+- Les workflows planifies peuvent etre retardes, surtout au debut de chaque heure. GitHub peut aussi desactiver les workflows planifies sur un repo public inactif depuis 60 jours.
+- Les runners standards sont gratuits sur les repositories publics. Sur un repository prive, les runs consomment le quota gratuit du compte, puis peuvent etre factures selon la configuration de facturation GitHub.

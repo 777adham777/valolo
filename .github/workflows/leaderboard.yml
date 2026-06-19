@@ -3,6 +3,7 @@ name: Envoyer Le Classement Quotidien
 on:
   schedule:
     - cron: "0 19 * * *"
+      timezone: "Europe/Paris"
   workflow_dispatch:
 
 permissions:

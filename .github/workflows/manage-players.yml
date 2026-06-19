@@ -46,16 +46,22 @@ jobs:
       - name: Valider les entrees add/remove
         if: ${{ inputs.action != 'list' }}
         shell: bash
+        env:
+          RIOT_ID: ${{ inputs.riot_id }}
+          REGION: ${{ inputs.region }}
         run: |
-          if [ -z "${{ inputs.riot_id }}" ] || [ -z "${{ inputs.region }}" ]; then
+          if [ -z "$RIOT_ID" ] || [ -z "$REGION" ]; then
             echo "riot_id and region are required for add/remove" >&2
             exit 1
           fi
 
       - name: Ajouter un joueur
         if: ${{ inputs.action == 'add' }}
-        run: npm run tracker:add-player -- "${{ inputs.riot_id }}" "${{ inputs.region }}" "${{ inputs.display_name }}"
+        run: npm run tracker:add-player -- "$RIOT_ID" "$REGION" "$DISPLAY_NAME"
         env:
+          RIOT_ID: ${{ inputs.riot_id }}
+          REGION: ${{ inputs.region }}
+          DISPLAY_NAME: ${{ inputs.display_name }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
@@ -64,8 +70,10 @@ jobs:
 
       - name: Retirer un joueur
         if: ${{ inputs.action == 'remove' }}
-        run: npm run tracker:remove-player -- "${{ inputs.riot_id }}" "${{ inputs.region }}"
+        run: npm run tracker:remove-player -- "$RIOT_ID" "$REGION"
         env:
+          RIOT_ID: ${{ inputs.riot_id }}
+          REGION: ${{ inputs.region }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}

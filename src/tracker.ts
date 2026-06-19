@@ -37,8 +37,8 @@ export class TrackerService {
   }
 
   public async removePlayer(riotId: string, region: Region): Promise<boolean> {
-    const [gameName, tagLine] = riotId.split("#");
-    if (!gameName || !tagLine) {
+    const [gameName, tagLine, ...rest] = riotId.split("#");
+    if (!gameName || !tagLine || rest.length > 0) {
       throw new Error(`Riot ID invalide "${riotId}". Format attendu : "<nom>#<tag>"`);
     }
 
@@ -213,17 +213,23 @@ function buildMatchPost(
   },
   snapshotBefore: {
     rankName: string | null;
+    rankTier: number | null;
     rankingInTier: number | null;
   },
   snapshotAfter: PlayerSnapshot
 ): MatchSummaryPost {
+  const fallbackRrDelta = snapshotBefore.rankTier !== null
+    && snapshotAfter.rankTier !== null
+    && snapshotBefore.rankTier === snapshotAfter.rankTier
+    && snapshotBefore.rankingInTier !== null
+    && snapshotAfter.rankingInTier !== null
+    ? snapshotAfter.rankingInTier - snapshotBefore.rankingInTier
+    : null;
+
   return {
     ...match,
     playerDisplayName: displayName,
-    rrDelta:
-      snapshotBefore.rankingInTier !== null && snapshotAfter.rankingInTier !== null
-        ? snapshotAfter.rankingInTier - snapshotBefore.rankingInTier
-        : null
+    rrDelta: snapshotAfter.lastRrChange ?? fallbackRrDelta
   };
 }
 
