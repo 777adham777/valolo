@@ -55,7 +55,7 @@ export class HenrikDevProvider implements TrackerProvider {
 
     return {
       rankTier: readOptionalNumber(currentData.currenttier),
-      rankName: readOptionalString(currentData.currenttier_patched),
+      rankName: readOptionalString(currentData.currenttierpatched),
       rankingInTier: readOptionalNumber(currentData.ranking_in_tier),
       wins,
       games,
@@ -180,7 +180,8 @@ function pickLatestSeasonStats(value: unknown): Record<string, unknown> | null {
   const seasons = Object.entries(value as Record<string, unknown>)
     .filter(([, seasonValue]) => seasonValue && typeof seasonValue === "object")
     .map(([seasonKey, seasonValue]) => ({ seasonKey, seasonValue: seasonValue as Record<string, unknown> }))
-    .filter(({ seasonValue }) => seasonValue.error !== true);
+    .filter(({ seasonValue }) => !("error" in seasonValue))
+    .filter(({ seasonValue }) => typeof seasonValue.number_of_games === "number");
 
   seasons.sort((left, right) => right.seasonKey.localeCompare(left.seasonKey));
   return seasons[0]?.seasonValue ?? null;

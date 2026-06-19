@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { TrackerStore } from "../src/db.js";
 import { formatLeaderboard, formatMatchSummary } from "../src/format.js";
+import { HenrikDevProvider } from "../src/providers/henrikdev.js";
 import { TrackerService } from "../src/tracker.js";
 import type {
   DiscordWebhookClient,
@@ -251,6 +252,61 @@ describe("formatters", () => {
     const fields = embed.fields as Array<Record<string, unknown>>;
     expect(String(fields[1]?.value)).toContain("Unknown -> Gold 2");
     expect(String(fields[2]?.value)).toContain("N/A -> 55 RR");
+  });
+});
+
+describe("HenrikDevProvider", () => {
+  it("reads current rank and latest valid season stats from henrik payloads", async () => {
+    const responses = [
+      {
+        status: 200,
+        data: {
+          current_data: {
+            currenttier: 16,
+            currenttierpatched: "Platinum 2",
+            ranking_in_tier: 60
+          },
+          by_season: {
+            e11a6: {
+              error: "No data available"
+            },
+            e11a5: {
+              error: "No data available"
+            },
+            e11a4: {
+              error: "No data available"
+            },
+            e11a3: {
+              wins: 6,
+              number_of_games: 10
+            }
+          }
+        }
+      }
+    ];
+
+    const provider = new HenrikDevProvider({
+      apiKey: "test-key",
+      fetchImpl: async () => new Response(JSON.stringify(responses.shift()), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      })
+    });
+
+    const snapshot = await provider.getPlayerSnapshot({
+      gameName: "Maverick",
+      tagLine: "7900",
+      region: "eu",
+      puuid: "867e1d40-64ba-5da0-9e6c-dec45f2fcfa3"
+    });
+
+    expect(snapshot.rankName).toBe("Platinum 2");
+    expect(snapshot.rankingInTier).toBe(60);
+    expect(snapshot.wins).toBe(6);
+    expect(snapshot.games).toBe(10);
+    expect(snapshot.winRate).toBe(60);
   });
 });
 
