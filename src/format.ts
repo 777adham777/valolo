@@ -24,7 +24,7 @@ export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPa
 
   const description = sortedEntries
     .map((entry, index) => {
-      const titleLine = `**${index + 1} - ${entry.displayName}**`;
+      const titleLine = `**${index + 1} - ${formatRankPrefix(entry)} ${entry.displayName}**`;
       const subtitleLine = `${formatRank(entry)} | ${formatWinRate(entry)}`;
       return `${titleLine}\n${subtitleLine}`;
     })
@@ -130,6 +130,52 @@ function formatWinRate(entry: LeaderboardEntry): string {
 
 function formatRank(entry: LeaderboardEntry): string {
   return entry.rankName ? `${entry.rankName.toUpperCase()}${entry.rankingInTier !== null ? ` - ${entry.rankingInTier} RR` : ""}` : "NON CLASSE";
+}
+
+function formatRankPrefix(entry: LeaderboardEntry): string {
+  const tier = entry.rankTier ?? 0;
+
+  if (tier >= 27) {
+    return "[R]";
+  }
+
+  if (tier >= 24) {
+    return "[I]";
+  }
+
+  if (tier >= 21) {
+    return "[A]";
+  }
+
+  if (tier >= 18) {
+    return "[D]";
+  }
+
+  if (tier >= 15) {
+    return "[P]";
+  }
+
+  if (tier >= 12) {
+    return "[G]";
+  }
+
+  if (tier >= 9) {
+    return "[S]";
+  }
+
+  if (tier >= 6) {
+    return "[B]";
+  }
+
+  if (tier >= 3) {
+    return "[F]";
+  }
+
+  if (tier > 0) {
+    return "[?]";
+  }
+
+  return "[NC]";
 }
 
 function formatDuration(gameLengthInMs: number | null): string {

@@ -181,11 +181,26 @@ function pickLatestSeasonStats(value: unknown): Record<string, unknown> | null {
 
   const seasons = Object.entries(value as Record<string, unknown>)
     .filter(([, seasonValue]) => seasonValue && typeof seasonValue === "object")
-    .map(([seasonKey, seasonValue]) => ({ seasonKey, seasonValue: seasonValue as Record<string, unknown> }))
+    .map(([seasonKey, seasonValue]) => ({
+      seasonKey,
+      seasonValue: seasonValue as Record<string, unknown>,
+      sortKey: parseSeasonKey(seasonKey)
+    }))
     .filter(({ seasonValue }) => !("error" in seasonValue))
-    .filter(({ seasonValue }) => typeof seasonValue.number_of_games === "number");
+    .filter(({ seasonValue }) => typeof seasonValue.number_of_games === "number")
+    .filter(({ sortKey }) => sortKey !== null);
 
-  seasons.sort((left, right) => right.seasonKey.localeCompare(left.seasonKey));
+  seasons.sort((left, right) => {
+    const leftKey = left.sortKey!;
+    const rightKey = right.sortKey!;
+
+    if (leftKey.episode !== rightKey.episode) {
+      return rightKey.episode - leftKey.episode;
+    }
+
+    return rightKey.act - leftKey.act;
+  });
+
   return seasons[0]?.seasonValue ?? null;
 }
 
@@ -227,4 +242,19 @@ function buildAgentPortraitUrl(agentId: string | null): string | null {
   }
 
   return `https://media.valorant-api.com/agents/${agentId}/displayicon.png`;
+}
+
+function parseSeasonKey(seasonKey: string): { episode: number; act: number } | null {
+  const match = /^e(\d+)a(\d+)$/.exec(seasonKey);
+  if (!match) {
+    return null;
+  }
+
+  const episode = Number(match[1]);
+  const act = Number(match[2]);
+  if (!Number.isFinite(episode) || !Number.isFinite(act)) {
+    return null;
+  }
+
+  return { episode, act };
 }

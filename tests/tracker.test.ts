@@ -252,7 +252,7 @@ describe("formatters", () => {
     const embed = payload.embeds?.[0] as Record<string, unknown>;
     const description = String(embed.description);
     expect(String(embed.title)).toContain("Leaderboard Quotidien");
-    expect(description).toContain("1 - Higher");
+    expect(description).toContain("1 - [G] Higher");
     expect(description).toContain("Higher");
     expect(description).toContain("GOLD 1 - 40 RR");
     expect(description).toContain("55.6%WR | 5-4");
@@ -342,6 +342,56 @@ describe("HenrikDevProvider", () => {
     expect(snapshot.wins).toBe(6);
     expect(snapshot.games).toBe(10);
     expect(snapshot.winRate).toBe(60);
+  });
+
+  it("sorts season keys numerically instead of lexicographically", async () => {
+    const responses = [
+      {
+        status: 200,
+        data: {
+          current_data: {
+            currenttier: 16,
+            currenttierpatched: "Platinum 2",
+            ranking_in_tier: 24
+          },
+          by_season: {
+            e9a3: {
+              wins: 0,
+              number_of_games: 3
+            },
+            e10a3: {
+              wins: 12,
+              number_of_games: 20
+            },
+            e11a3: {
+              wins: 49,
+              number_of_games: 86
+            }
+          }
+        }
+      }
+    ];
+
+    const provider = new HenrikDevProvider({
+      apiKey: "test-key",
+      fetchImpl: async () => new Response(JSON.stringify(responses.shift()), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      })
+    });
+
+    const snapshot = await provider.getPlayerSnapshot({
+      gameName: "2noteszer",
+      tagLine: "3291",
+      region: "eu",
+      puuid: "98e2cf2f-95f3-5a56-8d92-6b48c93ab8d6"
+    });
+
+    expect(snapshot.wins).toBe(49);
+    expect(snapshot.games).toBe(86);
+    expect(snapshot.winRate).toBe(57);
   });
 });
 
