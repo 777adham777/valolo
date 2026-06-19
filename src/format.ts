@@ -2,30 +2,49 @@ import type { DiscordWebhookPayload, LeaderboardEntry, MatchSummaryPost } from "
 
 export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPayload;
 export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPayload {
-  const description = entries.length === 0
-    ? "Aucun joueur suivi pour le moment."
-    : entries
-      .map((entry, index) => {
-        const rank = entry.rankName ? `${entry.rankName}${entry.rankingInTier !== null ? ` | ${entry.rankingInTier} RR` : ""}` : "Non classe";
-        const winRate = formatWinRate(entry);
-        const label = getPlacementLabel(index);
+  if (entries.length === 0) {
+    return {
+      embeds: [
+        {
+          title: "Classement Valorant Quotidien",
+          description: "Aucun joueur suivi pour le moment.",
+          color: 0xe67e22,
+          footer: {
+            text: "Mise a jour quotidienne des joueurs suivis"
+          }
+        }
+      ]
+    };
+  }
 
-        return [
-          `${label} **${entry.displayName}**`,
-          `> Rang : \`${rank}\``,
-          `> Saison : \`${winRate}\``
-        ].join("\n");
-      })
-      .join("\n\n");
+  const podium = entries
+    .slice(0, 3)
+    .map((entry, index) => `${getPlacementLabel(index)} **${entry.displayName}**\n${formatRank(entry)}\n${formatWinRate(entry)}`)
+    .join("\n\n");
+
+  const tableLines = [
+    `${padRight("#", 4)}${padRight("Joueur", 16)}${padRight("Rang", 24)}WR`,
+    ...entries.map((entry, index) => {
+      const placement = String(index + 1);
+      const player = truncate(entry.displayName, 15);
+      const rank = truncate(formatRank(entry), 23);
+      const winRate = formatWinRate(entry);
+
+      return `${padRight(placement, 4)}${padRight(player, 16)}${padRight(rank, 24)}${winRate}`;
+    })
+  ];
+
+  const tableFields = splitTableIntoFields(tableLines);
 
   return {
     embeds: [
       {
         title: "Classement Valorant Quotidien",
-        description,
+        description: `**Podium**\n${podium}`,
         color: 0xe67e22,
+        fields: tableFields,
         footer: {
-          text: "Mise a jour quotidienne des joueurs suivis"
+          text: `${entries.length} joueur(s) suivi(s)`
         }
       }
     ]
@@ -113,6 +132,10 @@ function formatWinRate(entry: LeaderboardEntry): string {
   return `${roundedWinRate}%WR | ${entry.wins}-${losses}`;
 }
 
+function formatRank(entry: LeaderboardEntry): string {
+  return entry.rankName ? `${entry.rankName}${entry.rankingInTier !== null ? ` ${entry.rankingInTier}RR` : ""}` : "Non classe";
+}
+
 function getPlacementLabel(index: number): string {
   if (index === 0) {
     return "[TOP 1]";
@@ -138,4 +161,48 @@ function formatDuration(gameLengthInMs: number | null): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function splitTableIntoFields(lines: string[]): Array<Record<string, unknown>> {
+  const fields: Array<Record<string, unknown>> = [];
+  let currentChunk: string[] = [];
+
+  for (const line of lines) {
+    const candidate = currentChunk.length === 0
+      ? `\`\`\`\n${line}\n\`\`\``
+      : `\`\`\`\n${currentChunk.join("\n")}\n${line}\n\`\`\``;
+
+    if (candidate.length > 1024 && currentChunk.length > 0) {
+      fields.push({
+        name: fields.length === 0 ? "Classement" : "Suite",
+        value: `\`\`\`\n${currentChunk.join("\n")}\n\`\`\``,
+        inline: false
+      });
+      currentChunk = [line];
+    } else {
+      currentChunk.push(line);
+    }
+  }
+
+  if (currentChunk.length > 0) {
+    fields.push({
+      name: fields.length === 0 ? "Classement" : "Suite",
+      value: `\`\`\`\n${currentChunk.join("\n")}\n\`\`\``,
+      inline: false
+    });
+  }
+
+  return fields;
+}
+
+function padRight(value: string, length: number): string {
+  return value.padEnd(length, " ");
+}
+
+function truncate(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, Math.max(maxLength - 1, 1))}…`;
 }

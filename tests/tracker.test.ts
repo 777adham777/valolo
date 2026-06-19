@@ -249,12 +249,15 @@ describe("formatters", () => {
       }
     ]);
 
-    const description = String(payload.embeds?.[0]?.description);
+    const embed = payload.embeds?.[0] as Record<string, unknown>;
+    const description = String(embed.description);
+    const fields = embed.fields as Array<Record<string, unknown>>;
     expect(description).toContain("[TOP 1]");
     expect(description).toContain("Higher");
-    expect(description).toContain("Gold 1");
-    expect(description).toContain("55.6%WR");
-    expect(description).toContain("5-4");
+    expect(fields[0]?.name).toBe("Classement");
+    expect(String(fields[0]?.value)).toContain("Joueur");
+    expect(String(fields[0]?.value)).toContain("Gold 1 40RR");
+    expect(String(fields[0]?.value)).toContain("55.6%WR | 5-4");
   });
 
   it("renders compact match card with portrait and essential stats", () => {
