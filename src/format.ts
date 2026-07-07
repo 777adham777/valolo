@@ -17,6 +17,7 @@ export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPa
       name: "VALOLO"
     },
     title: "🏆 Leaderboard Quotidien",
+    description: EMBED_WIDTH_PAD,
     color: DEFAULT_EMBED_COLOR,
     timestamp: new Date().toISOString()
   };
@@ -27,7 +28,7 @@ export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPa
         embeds: [
           {
             ...headerEmbed,
-            description: "Aucun joueur suivi pour le moment."
+            description: `Aucun joueur suivi pour le moment.\n${EMBED_WIDTH_PAD}`
           }
         ]
       }
@@ -43,7 +44,7 @@ export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPa
         name: `${formatPosition(index)}  ${entry.displayName}`,
         ...(iconUrl ? { icon_url: iconUrl } : {})
       },
-      description: formatLeaderboardLine(entry)
+      description: `${formatLeaderboardLine(entry)}\n${EMBED_WIDTH_PAD}`
     };
   });
 

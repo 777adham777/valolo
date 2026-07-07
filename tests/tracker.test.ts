@@ -732,14 +732,17 @@ describe("HenrikDevProvider", () => {
           },
           seasonal: [
             {
+              // acte courant place EN PREMIER : l'ordre du tableau ne doit pas compter
+              season: { id: "current-season", short: "e11a1" },
+              // "wins" exclut les placements ; act_wins liste chaque victoire reelle
+              wins: 12,
+              games: 20,
+              act_wins: Array.from({ length: 14 }, () => ({ id: 12, name: "Gold 1" }))
+            },
+            {
               season: { id: "old-season", short: "e10a4" },
               wins: 30,
               games: 61
-            },
-            {
-              season: { id: "current-season", short: "e11a1" },
-              wins: 12,
-              games: 20
             }
           ]
         }
@@ -766,7 +769,8 @@ describe("HenrikDevProvider", () => {
     expect(snapshot.rankName).toBe("Platinum 2");
     expect(snapshot.rankingInTier).toBe(60);
     expect(snapshot.lastRrChange).toBe(18);
-    expect(snapshot.wins).toBe(12);
+    // 14 victoires reelles (act_wins) et non les 12 "wins" hors placements
+    expect(snapshot.wins).toBe(14);
     expect(snapshot.games).toBe(20);
   });
 

@@ -545,17 +545,50 @@ function parseCurrentSeasonStats(seasonal: unknown): { wins: number | null; game
     return { wins: null, games: null };
   }
 
-  // HenrikDev renvoie les actes du plus ancien au plus recent : le dernier est l'acte en cours.
-  const current = seasonal[seasonal.length - 1];
-  if (!current || typeof current !== "object" || Array.isArray(current)) {
+  const entries = seasonal.filter(
+    (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry)
+  );
+
+  // L'acte en cours est celui dont le code de saison ("e11a4", "v25a3"...) est le plus
+  // recent : on ne se fie pas a l'ordre du tableau, non documente.
+  let current: Record<string, unknown> | null = null;
+  let bestOrder = -1;
+  for (const entry of entries) {
+    const season = entry.season && typeof entry.season === "object" && !Array.isArray(entry.season)
+      ? entry.season as Record<string, unknown>
+      : null;
+    const order = parseSeasonOrder(readOptionalString(season?.short));
+    if (order !== null && order > bestOrder) {
+      bestOrder = order;
+      current = entry;
+    }
+  }
+  current ??= entries[entries.length - 1] ?? null;
+  if (!current) {
     return { wins: null, games: null };
   }
 
-  const record = current as Record<string, unknown>;
+  // "act_wins" liste chaque victoire de l'acte (placements compris), alors que "wins"
+  // exclut les victoires de placement : on prefere le decompte complet, coherent avec
+  // l'affichage du jeu et des sites de tracking.
+  const actWins = Array.isArray(current.act_wins) ? current.act_wins.length : null;
   return {
-    wins: readOptionalNumber(record.wins),
-    games: readOptionalNumber(record.games)
+    wins: actWins ?? readOptionalNumber(current.wins),
+    games: readOptionalNumber(current.games)
   };
+}
+
+function parseSeasonOrder(short: string | null): number | null {
+  if (!short) {
+    return null;
+  }
+
+  const match = /^[a-z](\d+)a(\d+)$/i.exec(short.trim());
+  if (!match) {
+    return null;
+  }
+
+  return Number(match[1]) * 100 + Number(match[2]);
 }
 
 function expectObject(value: unknown, label: string): Record<string, unknown> {
