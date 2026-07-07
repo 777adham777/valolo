@@ -36,15 +36,25 @@ export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPa
   }
 
   const sortedEntries = [...entries].sort(compareLeaderboardEntries);
+
+  // Les cartes joueurs s'alignent sur la ligne la plus longue du lot (stats ou pseudo),
+  // completee par des caracteres invisibles : largeur homogene sans etre etiree au maximum.
+  const statLines = sortedEntries.map(formatLeaderboardLine);
+  const targetLength = Math.max(
+    ...statLines.map(visibleLength),
+    ...sortedEntries.map((entry) => entry.displayName.length + 6)
+  );
+
   const playerEmbeds = sortedEntries.map((entry, index) => {
     const iconUrl = rankIconUrl(entry.rankTier);
+    const line = statLines[index]!;
     return {
       color: rankColor(entry.rankTier),
       author: {
         name: `${formatPosition(index)}  ${entry.displayName}`,
         ...(iconUrl ? { icon_url: iconUrl } : {})
       },
-      description: `${formatLeaderboardLine(entry)}\n${EMBED_WIDTH_PAD}`
+      description: line + "⠀".repeat(Math.max(0, targetLength - visibleLength(line) + 2))
     };
   });
 
@@ -250,6 +260,11 @@ function formatLeaderboardLine(entry: LeaderboardEntry): string {
 
 function formatWinRate(winRate: number): string {
   return Number.isInteger(winRate) ? String(winRate) : winRate.toFixed(1);
+}
+
+// Longueur telle que rendue par Discord : les marqueurs de gras ne s'affichent pas.
+function visibleLength(text: string): number {
+  return text.replace(/\*\*/g, "").length;
 }
 
 function formatKda(match: MatchSummaryPost): string {

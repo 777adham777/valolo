@@ -533,6 +533,12 @@ describe("formatters", () => {
     expect(third.author.name).toContain("Unranked");
     expect(third.author.icon_url).toBeUndefined();
     expect(third.description).toContain("Non classé");
+
+    // toutes les cartes joueurs sont completees a la meme largeur visible
+    const visibleLengths = [first, second, third].map(
+      (embed) => embed.description.replace(/\*\*/g, "").length
+    );
+    expect(new Set(visibleLengths).size).toBe(1);
   });
 
   it("splits the leaderboard into several messages beyond 10 embeds", () => {
