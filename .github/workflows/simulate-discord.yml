@@ -1,0 +1,44 @@
+name: Simuler Toutes Les Fonctionnalites (Discord Test)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: valorant-tracker-simulate-discord
+  cancel-in-progress: false
+
+env:
+  # Webhook du serveur Discord de test, jamais celui de prod.
+  DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_TEST_WEBHOOK_URL }}
+  HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
+  # Base SQLite ephemere : la simulation ne lit ni n'ecrit aucune donnee, elle ne
+  # touche donc jamais la base Turso de production.
+  TURSO_DATABASE_URL: "file:./tracker-simulate.sqlite"
+  LEADERBOARD_TIMEZONE: Europe/Paris
+
+jobs:
+  simulate-discord:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup tracker runtime
+        uses: ./.github/actions/setup-tracker
+        with:
+          cache-key: ${{ runner.os }}-node22-node-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Verifier que le webhook de test est configure
+        shell: bash
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Le secret DISCORD_TEST_WEBHOOK_URL est manquant." >&2
+            exit 1
+          fi
+
+      - name: Simuler toutes les fonctionnalites sur le webhook de test
+        run: npm run tracker:simulate-discord

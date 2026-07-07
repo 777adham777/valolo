@@ -1,0 +1,83 @@
+name: Tester Sur Le Serveur Discord De Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      riot_id:
+        description: "Riot ID a utiliser pour le test, par exemple TenZ#NA1"
+        required: true
+        type: string
+      region:
+        description: "Region : ap, br, eu, kr, latam, na"
+        required: false
+        type: string
+        default: "eu"
+      display_name:
+        description: "Nom affiche optionnel"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: valorant-tracker-test-discord
+  cancel-in-progress: false
+
+env:
+  # Webhook du serveur Discord de test, jamais celui de prod.
+  DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_TEST_WEBHOOK_URL }}
+  HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
+  # Base SQLite ephemere sur le runner : aucun impact sur la base Turso de prod
+  # (sinon un poll de test marquerait les matchs comme deja postes).
+  TURSO_DATABASE_URL: "file:./tracker-test.sqlite"
+  LEADERBOARD_TIMEZONE: Europe/Paris
+
+jobs:
+  test-discord:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup tracker runtime
+        uses: ./.github/actions/setup-tracker
+        with:
+          cache-key: ${{ runner.os }}-node22-node-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Verifier que le webhook de test est configure
+        shell: bash
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Le secret DISCORD_TEST_WEBHOOK_URL est manquant." >&2
+            exit 1
+          fi
+
+      - name: Health check (HenrikDev + webhook de test)
+        run: npm run tracker:health
+
+      - name: Ajouter le joueur de test
+        run: npm run tracker:add-player -- "$RIOT_ID" "$REGION" "$DISPLAY_NAME"
+        env:
+          RIOT_ID: ${{ inputs.riot_id }}
+          REGION: ${{ inputs.region }}
+          DISPLAY_NAME: ${{ inputs.display_name }}
+
+      - name: Lister les joueurs suivis
+        run: npm run tracker:list-players
+
+      - name: Synchroniser les snapshots
+        run: npm run tracker:sync
+
+      - name: Poster le dernier match sur le serveur de test
+        run: npm run tracker:latest-match
+
+      - name: Poster le leaderboard sur le serveur de test
+        run: npm run tracker:leaderboard
+
+      - name: Poll (verifie la dedupe, ne doit rien reposter)
+        run: npm run tracker:poll
+
+      - name: Poster le recap hebdomadaire sur le serveur de test
+        run: npm run tracker:weekly-recap

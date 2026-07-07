@@ -1,0 +1,33 @@
+name: Envoyer Le Dernier Match
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: valorant-tracker-latest-match
+  cancel-in-progress: false
+
+jobs:
+  latest-match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup tracker runtime
+        uses: ./.github/actions/setup-tracker
+        with:
+          cache-key: ${{ runner.os }}-node22-node-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Envoyer le dernier match
+        run: npm run tracker:latest-match
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          LEADERBOARD_TIMEZONE: Europe/Paris

@@ -1,0 +1,36 @@
+name: Envoyer Le Classement Quotidien
+
+on:
+  schedule:
+    - cron: "0 19 * * *"
+      timezone: "Europe/Paris"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: valorant-tracker-leaderboard
+  cancel-in-progress: false
+
+jobs:
+  leaderboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup tracker runtime
+        uses: ./.github/actions/setup-tracker
+        with:
+          cache-key: ${{ runner.os }}-node22-node-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Envoyer le classement
+        run: npm run tracker:leaderboard
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          LEADERBOARD_TIMEZONE: Europe/Paris

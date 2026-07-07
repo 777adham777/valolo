@@ -1,0 +1,36 @@
+name: Envoyer La Ceremonie De La Semaine
+
+on:
+  schedule:
+    - cron: "0 20 * * 0"
+      timezone: "Europe/Paris"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: valorant-tracker-weekly-recap
+  cancel-in-progress: false
+
+jobs:
+  weekly-recap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup tracker runtime
+        uses: ./.github/actions/setup-tracker
+        with:
+          cache-key: ${{ runner.os }}-node22-node-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Envoyer le recap hebdomadaire
+        run: npm run tracker:weekly-recap
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HENRIKDEV_API_KEY: ${{ secrets.HENRIKDEV_API_KEY }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          LEADERBOARD_TIMEZONE: Europe/Paris
