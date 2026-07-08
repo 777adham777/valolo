@@ -8,6 +8,8 @@ const CARRY_RATIO = 1.5;
 const MIN_FIRST_DEATHS_FOR_MAGNET = 3;
 const MIN_FIRST_BLOODS_FOR_ENTRY = 4;
 const MIN_KILLS_FOR_FLAT_KD = 10;
+const MIN_KILLS_FOR_SYMMETRY = 5;
+const JACKPOT_RR_MIN = 25;
 const CLOSE_WIN_MAX_ROUND_GAP = 2;
 // 13-0 ou 13-1, dans un sens comme dans l'autre.
 const STOMP_MAX_LOSER_SCORE = 1;
@@ -76,21 +78,31 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(1, [
       `🔥 ${name} a claqué ${highlights.aces} ACES dans le même match. Faites-le signer avant qu'il demande une augmentation.`,
       `🔥 ${highlights.aces} ACES dans la même game. ${name} ne joue pas au même jeu que nous.`,
-      `🔥 ${name} enchaîne les ACES comme d'autres enchaînent les défaites.`
+      `🔥 ${name} enchaîne les ACES comme d'autres enchaînent les défaites.`,
+      `🔥 ${highlights.aces} aces. ${name} joue en mode entraînement, sauf que les cibles bougent légèrement.`
     ]);
   } else if (highlights.aces === 1) {
     pushOne(2, [
       `🔥 ${name} GG pour l'ACE !`,
       `🔥 ${name} vient de nettoyer un round à lui tout seul. Propre.`,
       `🔥 ACE ! ${name} a éteint les 5 à lui tout seul.`,
-      `🔥 Round nettoyé par ${name}. Personne n'a survécu pour raconter.`
+      `🔥 Round nettoyé par ${name}. Personne n'a survécu pour raconter.`,
+      `🔥 ACE pour ${name}. Cinq entrées au cimetière, aller simple.`
     ]);
   }
 
   // Un 4K sans ace : on ne le mentionne pas si un ace a deja ete celebre juste au-dessus.
   if (highlights.aces === 0 && highlights.quadKills >= 1) {
     pushOne(20, [
-      `💣 4 kills dans le round pour ${name}. L'ace était à une balle près.`
+      `💣 4 kills dans le round pour ${name}. L'ace était à une balle près.`,
+      `💣 ${name} rate l'ACE d'un kill. Il y repensera sous la douche.`
+    ]);
+  }
+
+  if (post.didWin === true && post.rrDelta !== null && post.rrDelta >= JACKPOT_RR_MIN) {
+    pushOne(30, [
+      `🎰 ${name} a fait sauter le distributeur de RR : +${post.rrDelta} d'un coup.`,
+      `🎰 ${name} repart avec +${post.rrDelta} RR. Le genre de gain qu'on ne déclare pas aux impôts.`
     ]);
   }
 
@@ -98,7 +110,11 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(3, [
       `💪 ${name} a joué en 1v9 !`,
       `💪 ${name} a porté quatre valises pendant tout le match.`,
-      `💪 ${name} a fait le match de sa vie pendant que les autres faisaient de la figuration.`
+      `💪 ${name} a fait le match de sa vie pendant que les autres faisaient de la figuration.`,
+      `💪 ${name} a fait une game en solo avec 4 spectateurs déguisés en coéquipiers.`,
+      `💪 Sans ${name}, ce match était perdu d'avance. Avec lui, à peine gagné.`,
+      `💪 ${name} a fait le café, sorti les poubelles et gagné le match. Les quatre autres regardaient.`,
+      `💪 Techniquement ils étaient cinq. Statistiquement, ${name} jouait seul.`
     ]);
   }
 
@@ -113,7 +129,8 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(4, [
       `🚨 ${name} finit à ${acsRounded} d'ACS. Soit c'est un smurf, soit il faut le signaler à Riot. Peut-être les deux.`,
       `🚨 ${acsRounded} d'ACS. ${name}, rends ce compte à son vrai propriétaire.`,
-      `🚨 ${name} à ${acsRounded} d'ACS. Le lobby a demandé un contrôle antidopage.`
+      `🚨 ${name} à ${acsRounded} d'ACS. Le lobby a demandé un contrôle antidopage.`,
+      `🚨 ${acsRounded} d'ACS. ${name}, montre ton dossier médical, ce n'est pas humain.`
     ]);
   }
 
@@ -121,7 +138,9 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(5, [
       `🔄 REMONTADA HISTORIQUE ! Ils étaient morts et enterrés, ils ont retourné le match.`,
       `🔄 Le match était plié. Quelqu'un a oublié de leur dire. REMONTADA.`,
-      `🔄 Tout le monde avait abandonné ce match, sauf eux. REMONTADA.`
+      `🔄 Tout le monde avait abandonné ce match, sauf eux. REMONTADA.`,
+      `🔄 Le match était scellé. ${name} a forcé la serrure.`,
+      `🔄 REMONTADA. Ils ont attendu d'être condamnés pour se mettre à jouer.`
     ]);
   }
 
@@ -147,7 +166,8 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(6, [
       `🎒 ${name} a gagné en étant dernier des 10. Porté de bout en bout comme un sac à dos.`,
       `🎒 Victoire pour ${name}, dernier du lobby. Le RR le plus gratuit de sa vie.`,
-      `🎒 ${name} a gagné sans toucher son clavier. Remerciez l'équipe.`
+      `🎒 ${name} a gagné sans toucher son clavier. Remerciez l'équipe.`,
+      `🎒 ${name} n'a rien fait de la game et repart avec son RR. La belle affaire.`
     ]);
   }
 
@@ -155,7 +175,8 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(7, [
       `🫡 ${name} a porté sa team sur ses épaules, mais malheureusement, ça n'a pas suffi..`,
       `🫡 ${name} top score du match, pour rien. La défaite la plus injuste de la soirée.`,
-      `🫡 ${name} a tout donné. Les autres ont regardé.`
+      `🫡 ${name} a tout donné. Les autres ont regardé.`,
+      `🫡 ${name} a porté quatre valises jusqu'au bord du gouffre. Puis tout le monde a sauté.`
     ]);
   }
 
@@ -209,7 +230,9 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     && post.teamScore <= STOMP_MAX_LOSER_SCORE
   ) {
     pushOne(27, [
-      `🧱 ${scoreLine}. Les joueurs retournent au vestiaire en silence.`
+      `🧱 ${scoreLine}. Les joueurs retournent au vestiaire en silence.`,
+      `🧱 ${scoreLine}. Les joueurs rangent le clavier en silence.`,
+      `🧱 ${scoreLine}. On appelle ça une défaite pédagogique.`
     ]);
   }
 
@@ -217,7 +240,9 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(10, [
       `⏱️ Défaite pliée en ${matchMinutes} minutes. Au moins ils n'ont pas fait durer la souffrance.`,
       `⏱️ ${matchMinutes} minutes. Le temps de préchauffer le four, c'était déjà fini.`,
-      `⏱️ Défaite speedrun en ${matchMinutes} minutes. Catégorie Any%.`
+      `⏱️ Défaite speedrun en ${matchMinutes} minutes. Catégorie Any%.`,
+      `⏱️ Défaite en ${matchMinutes} minutes. Au moins la souffrance a été concise.`,
+      `⏱️ Perdu en ${matchMinutes} minutes. Efficace, dans le mauvais sens.`
     ]);
   }
 
@@ -230,11 +255,25 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(11, [
       `🛋️ ${matchMinutes} minutes de match. À ce stade ils habitent sur le serveur.`,
       `🛋️ Un match de ${matchMinutes} minutes. Facturez les heures sup.`,
-      `🛋️ ${matchMinutes} minutes de match. Il y a des CDD plus courts.`
+      `🛋️ ${matchMinutes} minutes de match. Il y a des CDD plus courts.`,
+      `🛋️ ${matchMinutes} minutes. Netflix aurait proposé "vous regardez encore ?"`
     ]);
   }
 
-  if (post.kills !== null && post.deaths !== null && post.kills === post.deaths && post.kills >= MIN_KILLS_FOR_FLAT_KD) {
+  // Symetrie totale (kills = morts = assists) est un cas particulier plus rare et plus
+  // drole que le simple KD a 1.00 : elle passe devant quand les deux se recoupent.
+  if (
+    post.kills !== null
+    && post.deaths !== null
+    && post.assists !== null
+    && post.kills === post.deaths
+    && post.deaths === post.assists
+    && post.kills >= MIN_KILLS_FOR_SYMMETRY
+  ) {
+    pushOne(32, [
+      `🔢 ${name} a aligné ${post.kills}/${post.deaths}/${post.assists}. Même sa calculatrice est impressionnée.`
+    ]);
+  } else if (post.kills !== null && post.deaths !== null && post.kills === post.deaths && post.kills >= MIN_KILLS_FOR_FLAT_KD) {
     pushOne(23, [
       `⚖️ KD de 1.00 pile. ${name}, le fonctionnaire du serveur : ni plus, ni moins.`
     ]);
@@ -244,15 +283,26 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(12, [
       `📐 ${name}, arrête de viser les pieds et monte ton viseur..`,
       `📐 ${hsRounded}% de HS. ${name} vise comme s'il jouait au trackpad.`,
-      `📐 Le crosshair de ${name} est resté collé au sol tout le match.`
+      `📐 Le crosshair de ${name} est resté collé au sol tout le match.`,
+      `📐 ${name}, la tête des ennemis est plus haut. Bien plus haut.`,
+      `📐 ${hsRounded}% de HS. Le crosshair de ${name} a passé la game à admirer le carrelage.`,
+      `📐 ${hsRounded}% de HS. Pour information, 100% des headshots doivent être tirés dans la tête !`
     ]);
   }
 
-  if (highlights.isMostDeathsInMatch) {
+  // Le plus grand nombre de morts du match raconte deux histoires opposees : sacrifice
+  // rentable si l'equipe gagne quand meme, entetement pur si elle perd.
+  if (highlights.isMostDeathsInMatch && post.didWin === true) {
+    pushOne(31, [
+      `🩹 ${deaths} morts, mais victoire quand même. ${name} a servi de bouclier humain, et ça a payé.`,
+      `🩹 ${name} est mort ${deaths} fois pour une victoire. Chair à canon rentable.`
+    ]);
+  } else if (highlights.isMostDeathsInMatch) {
     pushOne(13, [
       `⚰️ ${name} a passé plus de temps mort que vivant.`,
       `⚰️ ${deaths} morts. ${name} a passé le match en caméra spectateur.`,
-      `⚰️ Mort ${deaths} fois. À ce stade ce n'est plus du courage, c'est de l'entêtement.`
+      `⚰️ Mort ${deaths} fois. À ce stade ce n'est plus du courage, c'est de l'entêtement.`,
+      `⚰️ ${name} a passé plus de temps au sol qu'un tapis.`
     ]);
   }
 
@@ -260,7 +310,10 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(14, [
       `🗡️ ${name} n'aurait pas dû pick un duelliste, lamentable.`,
       `🗡️ ${name} a pris ${agentLabel} pour le style, visiblement pas pour les kills.`,
-      `🗡️ ${name} instalock ${agentLabel} pour finir bottom frag. Le crime parfait.`
+      `🗡️ ${name} instalock ${agentLabel} pour finir bottom frag. Le crime parfait.`,
+      `🗡️ ${name} prend un duelliste pour finir bottom frag. Le rôle exige des kills, pas juste un skin.`,
+      `🗡️ Instalock ${agentLabel}, résultat en bas du tableau. La déclaration d'intention n'a pas suivi.`,
+      `🗡️ ${name} a pick ${agentLabel} pour le fantasme. La réalité a voté contre.`
     ]);
   }
 
@@ -273,7 +326,8 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(15, [
       `🪦 ${name} est un aimant à balles. Premier mort du round à répétition, record du monde du speedrun spectateur.`,
       `🪦 ${firstDeaths} fois premier mort du round. ${name}, l'éclaireur sacrificiel.`,
-      `🪦 ${name} ouvre chaque round en mourant. Technique audacieuse.`
+      `🪦 ${name} ouvre chaque round en mourant. Technique audacieuse.`,
+      `🪦 ${firstDeaths} fois premier mort. ${name} a un abonnement à l'écran de spectateur.`
     ]);
   }
 
@@ -298,7 +352,8 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
   ) {
     pushOne(28, [
       `🐺 ${post.kills} kills, 0 assist. ${name} ne connaît pas ses coéquipiers, et c'est réciproque.`,
-      `🐺 ${name} a fait sa game en silence radio : ${post.kills} kills, aucune assist.`
+      `🐺 ${name} a fait sa game en silence radio : ${post.kills} kills, aucune assist.`,
+      `🐺 Aucune assist. ${name} chasse seul, dîne seul, gagne seul.`
     ]);
   }
 
@@ -323,13 +378,15 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     pushOne(17, [
       `👻 ${name} a fini avec un score de combat à deux chiffres. Le bot de l'entraînement fait plus de dégâts que lui.`,
       `👻 Les ennemis ont fini le match sans savoir que ${name} y était.`,
-      `👻 ${acsRounded} d'ACS. ${name} était là, mais seulement sur le papier.`
+      `👻 ${acsRounded} d'ACS. ${name} était là, mais seulement sur le papier.`,
+      `👻 ${acsRounded} d'ACS. ${name} figurait sur la feuille de match, et c'est tout.`
     ]);
   } else if (adrRounded !== null && adr! < LOW_ADR) {
     pushOne(18, [
       `📉 ${name} a mis moins de 60 de dégâts par round. En gros, il mettait une balle de Classic et il s'en allait.`,
       `📉 ${adrRounded} de dégâts par round. ${name} tire à blanc.`,
-      `📉 ${name} fait moins de dégâts qu'une spike qui explose dans le vide.`
+      `📉 ${name} fait moins de dégâts qu'une spike qui explose dans le vide.`,
+      `📉 ${adrRounded} de dégâts par round. ${name} met une balle et s'excuse.`
     ]);
   }
 
@@ -353,7 +410,8 @@ export function getStreakMessage(
     ? count >= 5
       ? [
         `👑 ${displayCount} victoires d'affilée ! ${name} est officiellement INARRÊTABLE.`,
-        `👑 ${name} : ${displayCount} wins de suite. Riot enquête, c'est trop propre.`
+        `👑 ${name} : ${displayCount} wins de suite. Riot enquête, c'est trop propre.`,
+        `👑 ${displayCount} victoires d'affilée. ${name} a oublié comment on perd.`
       ]
       : count === 4
         ? [
@@ -392,7 +450,9 @@ export function getBottomDuoPunchline(names: string[], matchId: string, pickVari
   const variants = [
     `🤡 ${nameList} se disputent la dernière place. Quelle rivalité !`,
     `🤡 ${nameList} au fond du classement, coude à coude. Le vrai match était là.`,
-    `🤡 Duel au sommet... du bas de tableau : ${names.join(" contre ")}.`
+    `🤡 Duel au sommet... du bas de tableau : ${names.join(" contre ")}.`,
+    `🤡 ${nameList} se battent pour la dernière place. Le seul vrai duel du match.`,
+    `🤡 Bataille au bas du classement : ${nameList}. Que le pire gagne.`
   ];
 
   const index = pickVariant

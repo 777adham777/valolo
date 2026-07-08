@@ -752,7 +752,7 @@ describe("punchlines", () => {
       .toContainEqual(expect.stringContaining("duelliste"));
     expect(punch({ didWin: false }, { teamChoked: true }))
       .toContainEqual(expect.stringContaining("choke"));
-    expect(punch({}, { isMostDeathsInMatch: true }))
+    expect(punch({ didWin: false }, { isMostDeathsInMatch: true }))
       .toContainEqual(expect.stringContaining("plus de temps mort"));
     expect(punch({}, { firstBloods: 0, firstDeaths: 5, isMostFirstDeathsInMatch: true }))
       .toContainEqual(expect.stringContaining("aimant à balles"));
@@ -807,6 +807,35 @@ describe("punchlines", () => {
     const overtime = punch({ didWin: true, teamScore: 15, opponentScore: 13, gameLengthInMs: 50 * 60_000 });
     expect(overtime.some((message) => message.includes("espérance de vie"))).toBe(false);
     expect(overtime.some((message) => message.includes("minutes de match"))).toBe(false);
+  });
+
+  it("celebrates jackpot RR, a useful sacrifice, and perfect symmetry", () => {
+    expect(punch({ didWin: true, rrDelta: 30 }))
+      .toContainEqual(expect.stringContaining("distributeur de RR"));
+    expect(punch({ didWin: true, rrDelta: 24 }).some((message) => message.includes("distributeur de RR"))).toBe(false);
+
+    const usefulSacrifice = punch({ didWin: true }, { isMostDeathsInMatch: true });
+    expect(usefulSacrifice.some((message) => message.includes("bouclier humain") || message.includes("Chair à canon"))).toBe(true);
+    expect(usefulSacrifice.some((message) => message.includes("plus de temps mort"))).toBe(false);
+
+    expect(punch({ kills: 6, deaths: 6, assists: 6 }))
+      .toContainEqual(expect.stringContaining("calculatrice"));
+    // KD plat sans symetrie totale : garde l'ancienne blague.
+    expect(punch({ kills: 12, deaths: 12, assists: 3 }))
+      .toContainEqual(expect.stringContaining("fonctionnaire"));
+    // Symetrie totale au-dessus du seuil KD plat : la blague la plus rare prend le dessus.
+    const bothThresholds = punch({ kills: 12, deaths: 12, assists: 12 });
+    expect(bothThresholds.some((message) => message.includes("calculatrice"))).toBe(true);
+    expect(bothThresholds.some((message) => message.includes("fonctionnaire"))).toBe(false);
+  });
+
+  it("exposes the freshly added custom variants", () => {
+    expect(getPunchlines(createPost({}, { aces: 2 }), () => 3))
+      .toContainEqual(expect.stringContaining("mode entraînement"));
+    expect(getPunchlines(createPost({ didWin: true }, { isBottomFragOfMatch: true }), () => 3))
+      .toContainEqual(expect.stringContaining("La belle affaire"));
+    expect(getPunchlines(createPost({ headshots: 1, bodyshots: 20, legshots: 6 }), () => 5))
+      .toContainEqual(expect.stringContaining("100% des headshots"));
   });
 
   it("rotates variants but stays deterministic for a given match", () => {
