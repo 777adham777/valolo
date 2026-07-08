@@ -145,7 +145,45 @@ async function postSoloMatchDemos(webhook: DiscordWebhookClient): Promise<void> 
       score: 2600, roundsPlayed: 23, damageDealt: 2100,
       didWin: true, teamScore: 13, opponentScore: 11,
       rrDelta: 19, rankTierAfter: 17, rankNameAfter: "Platinum 3", rrAfter: 8
-    }, { teamComeback: true, isBottomFragOfMatch: true })
+    }, { teamComeback: true, isBottomFragOfMatch: true }),
+
+    // Rouleau compresseur 13-1 + intouchable
+    basePost({
+      playerDisplayName: "RouleauDemo#EU1",
+      mapName: "Pearl",
+      agentName: "Neon",
+      kills: 19, deaths: 4, assists: 6,
+      headshots: 10, bodyshots: 26, legshots: 2,
+      score: 4900, roundsPlayed: 14, damageDealt: 2900,
+      gameLengthInMs: 22 * 60_000,
+      didWin: true, teamScore: 13, opponentScore: 1,
+      rrDelta: 26, rankTierAfter: 16, rankNameAfter: "Platinum 2", rrAfter: 30
+    }),
+
+    // La lecon : ecrasement subi 1-13
+    basePost({
+      playerDisplayName: "LeconDemo#EU1",
+      mapName: "Ascent",
+      agentName: "Brimstone",
+      kills: 5, deaths: 13, assists: 1,
+      headshots: 3, bodyshots: 12, legshots: 1,
+      score: 2100, roundsPlayed: 14, damageDealt: 1600,
+      gameLengthInMs: 21 * 60_000,
+      didWin: false, teamScore: 1, opponentScore: 13,
+      rrDelta: -22, rankTierAfter: 12, rankNameAfter: "Gold 1", rrAfter: 18
+    }),
+
+    // Le touriste : quasi aucune participation aux combats
+    basePost({
+      playerDisplayName: "TouristeDemo#EU1",
+      mapName: "Breeze",
+      agentName: "Sage",
+      kills: 5, deaths: 8, assists: 2,
+      headshots: 4, bodyshots: 14, legshots: 1,
+      score: 2300, roundsPlayed: 18, damageDealt: 2200,
+      didWin: false, teamScore: 5, opponentScore: 13,
+      rrDelta: -15, rankTierAfter: 13, rankNameAfter: "Gold 2", rrAfter: 44
+    })
   ];
 
   for (const post of posts) {
@@ -225,11 +263,14 @@ async function postRankChangeDemos(webhook: DiscordWebhookClient): Promise<void>
 }
 
 async function postStreakDemos(webhook: DiscordWebhookClient): Promise<void> {
-  await webhook.postMessage(formatStreak("StreakDemo#EU1", "win", 5, false));
+  // Un exemple par palier, variante 0 forcee pour un rendu deterministe.
+  await webhook.postMessage(formatStreak("StreakDemo#EU1", "win", 3, false, () => 0));
   await delay(300);
-  await webhook.postMessage(formatStreak("TiltDemo#EU1", "loss", 4, false));
+  await webhook.postMessage(formatStreak("OnFireDemo#EU1", "win", 10, true, () => 0));
   await delay(300);
-  await webhook.postMessage(formatStreak("OnFireDemo#EU1", "win", 10, true));
+  await webhook.postMessage(formatStreak("TiltDemo#EU1", "loss", 4, false, () => 0));
+  await delay(300);
+  await webhook.postMessage(formatStreak("NaufrageDemo#EU1", "loss", 6, true, () => 0));
   await delay(300);
 }
 
@@ -270,6 +311,7 @@ async function postWeeklyRecapDemo(webhook: DiscordWebhookClient): Promise<void>
 function baseHighlights(overrides: Partial<MatchHighlights> = {}): MatchHighlights {
   return {
     aces: 0,
+    quadKills: 0,
     firstBloods: 1,
     firstDeaths: 1,
     isMostFirstDeathsInMatch: false,
@@ -309,6 +351,7 @@ function basePost(overrides: Partial<Omit<MatchSummaryPost, "highlights">>, high
     teamScore: 13,
     opponentScore: 9,
     didWin: true,
+    rosterPuuids: [],
     playerDisplayName: "Demo#EU1",
     rrDelta: 18,
     rankTierAfter: 15,

@@ -19,6 +19,12 @@ export class TrackerService {
   // de matchs recuperes.
   private static readonly MATCH_SCAN_LIMIT = 5;
 
+  // L'historique MMR de chaque joueur se met a jour a son propre rythme cote HenrikDev :
+  // un match commun peut etre detecte pour un joueur un poll avant l'autre. On differe la
+  // publication tant qu'un joueur suivi present dans le lobby n'a pas encore le match,
+  // dans la limite de cette fenetre (sinon on publie sans lui pour ne pas bloquer).
+  private static readonly GROUP_WAIT_MAX_MS = 2 * 60 * 60 * 1000;
+
   public constructor(
     private readonly store: TrackerStore,
     private readonly provider: TrackerProvider,
@@ -317,7 +323,25 @@ export class TrackerService {
       (left, right) => compareMatchDates(left[1][0]!.startedAt, right[1][0]!.startedAt)
     );
 
+    // Joueurs dont un match a ete differe : leurs matchs suivants sont aussi differes
+    // pour conserver l'ordre chronologique de leurs publications.
+    const deferredPlayerIds = new Set<number>();
+
     for (const [matchId, pending] of groups) {
+      if (pending.some((entry) => deferredPlayerIds.has(entry.playerId))) {
+        for (const entry of pending) {
+          deferredPlayerIds.add(entry.playerId);
+        }
+        continue;
+      }
+
+      if (await this.shouldWaitForTrackedTeammates(matchId, pending, players)) {
+        for (const entry of pending) {
+          deferredPlayerIds.add(entry.playerId);
+        }
+        continue;
+      }
+
       try {
         await this.webhook.postMessage(formatMatchSummary(pending.map((entry) => entry.post)));
         for (const entry of pending) {
@@ -365,6 +389,34 @@ export class TrackerService {
     const records = await this.store.getMatchStatsSince(since);
     await this.webhook.postMessage(buildWeeklyRecapPayload(records));
     return { posted: true, failures: [] };
+  }
+
+  // Vrai si un autre joueur suivi figure dans le lobby du match, ne l'a pas encore poste,
+  // et que le match est assez recent pour esperer le voir apparaitre au prochain poll.
+  private async shouldWaitForTrackedTeammates(
+    matchId: string,
+    pending: Array<{ playerId: number; post: MatchSummaryPost; startedAt: string | null }>,
+    players: Array<{ id: number; puuid: string }>
+  ): Promise<boolean> {
+    const startedAtTime = pending[0]?.startedAt ? Date.parse(pending[0].startedAt) : Number.NaN;
+    if (!Number.isFinite(startedAtTime) || Date.now() - startedAtTime > TrackerService.GROUP_WAIT_MAX_MS) {
+      return false;
+    }
+
+    const pendingPlayerIds = new Set(pending.map((entry) => entry.playerId));
+    const rosterPuuids = new Set(pending[0]!.post.rosterPuuids);
+    const missingPlayers = players.filter(
+      (player) => !pendingPlayerIds.has(player.id) && rosterPuuids.has(player.puuid)
+    );
+
+    for (const player of missingPlayers) {
+      const alreadyPosted = await this.store.getPostedMatchIds(player.id, [matchId]);
+      if (!alreadyPosted.has(matchId)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private async getMatchRrChangesSafely(identity: PlayerIdentity, failures: string[]): Promise<Map<string, MatchRrChange>> {

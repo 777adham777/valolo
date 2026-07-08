@@ -6,7 +6,7 @@ import { TrackerStore } from "../src/db.js";
 import { formatLeaderboard, formatMatchSummary } from "../src/format.js";
 import { HenrikDevProvider } from "../src/providers/henrikdev.js";
 import { TrackerService } from "../src/tracker.js";
-import { getPunchlines } from "../src/punchlines.js";
+import { getPunchlines, getStreakMessage } from "../src/punchlines.js";
 import type {
   DiscordWebhookClient,
   DiscordWebhookPayload,
@@ -318,6 +318,72 @@ describe("TrackerService", () => {
     expect(webhook.payloads).toHaveLength(1);
   });
 
+  it("defers a shared match until the other tracked player also reports it", async () => {
+    const { service, provider, webhook } = createHarness();
+    const tracker = await service;
+
+    provider.latestMatch = createMatch("match-1");
+    await tracker.addPlayer("Input#Tag", "eu");
+
+    provider.resolvedPlayer = {
+      gameName: "Other",
+      tagLine: "EUW",
+      region: "eu",
+      puuid: "puuid-2",
+      displayName: "Other#EUW"
+    };
+    await tracker.addPlayer("Other#EUW", "eu");
+
+    // Match commun recent, dont le lobby contient les deux joueurs suivis. L'historique
+    // de puuid-2 est en retard : seul puuid-1 voit le match au premier poll.
+    const freshDate = new Date().toISOString();
+    const sharedForDemo = { ...createMatch("match-9", freshDate), rosterPuuids: ["puuid-1", "puuid-2"] };
+    const sharedForOther = { ...sharedForDemo, kills: 30, score: 7000 };
+    provider.recentMatchesByPuuid.set("puuid-1", [sharedForDemo, createMatch("match-1")]);
+    provider.recentMatchesByPuuid.set("puuid-2", [createMatch("match-1")]);
+
+    const firstPoll = await tracker.pollMatches();
+    expect(firstPoll.postedMatches).toBe(0);
+    expect(webhook.payloads).toHaveLength(0);
+
+    // L'historique de puuid-2 rattrape son retard : le match part groupe.
+    provider.recentMatchesByPuuid.set("puuid-2", [sharedForOther, createMatch("match-1")]);
+    const secondPoll = await tracker.pollMatches();
+
+    expect(secondPoll.postedMatches).toBe(1);
+    expect(webhook.payloads).toHaveLength(1);
+    const embed = webhook.payloads[0]?.embeds?.[0] as Record<string, unknown>;
+    const author = embed.author as Record<string, unknown>;
+    expect(String(author.name)).toContain("2 joueurs suivis");
+  });
+
+  it("posts a shared match without waiting when it is too old to still be lagging", async () => {
+    const { service, provider, webhook } = createHarness();
+    const tracker = await service;
+
+    provider.latestMatch = createMatch("match-1");
+    await tracker.addPlayer("Input#Tag", "eu");
+
+    provider.resolvedPlayer = {
+      gameName: "Other",
+      tagLine: "EUW",
+      region: "eu",
+      puuid: "puuid-2",
+      displayName: "Other#EUW"
+    };
+    await tracker.addPlayer("Other#EUW", "eu");
+
+    // Meme lobby, mais le match date de bien plus que la fenetre d'attente : on ne bloque pas.
+    const staleDate = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    const shared = { ...createMatch("match-9", staleDate), rosterPuuids: ["puuid-1", "puuid-2"] };
+    provider.recentMatchesByPuuid.set("puuid-1", [shared, createMatch("match-1")]);
+    provider.recentMatchesByPuuid.set("puuid-2", [createMatch("match-1")]);
+
+    const result = await tracker.pollMatches();
+    expect(result.postedMatches).toBe(1);
+    expect(webhook.payloads).toHaveLength(1);
+  });
+
   it("announces a win streak after the match summaries", async () => {
     const { service, provider, webhook } = createHarness();
     const tracker = await service;
@@ -336,7 +402,9 @@ describe("TrackerService", () => {
     expect(result.postedMatches).toBe(3);
     expect(webhook.payloads).toHaveLength(4);
     const announcement = webhook.payloads[3]?.embeds?.[0] as Record<string, unknown>;
-    expect(String(announcement.description)).toContain("4 victoires d'affilée");
+    // Serie de 4 victoires : palier 🚀, quelle que soit la variante choisie par le hash.
+    expect(String(announcement.description)).toContain("🚀");
+    expect(String(announcement.description)).toMatch(/4 (victoires d'affilée|wins)/);
     expect(String(announcement.description)).toContain("Demo#EUW");
 
     const secondPoll = await tracker.pollMatches();
@@ -534,11 +602,13 @@ describe("formatters", () => {
     expect(third.author.icon_url).toBeUndefined();
     expect(third.description).toContain("Non classé");
 
-    // toutes les cartes joueurs sont completees a la meme largeur visible
+    // toutes les cartes (en-tete compris) sont completees a la meme largeur visible
+    const header = embeds[0] as { description: string };
     const visibleLengths = [first, second, third].map(
       (embed) => embed.description.replace(/\*\*/g, "").length
     );
     expect(new Set(visibleLengths).size).toBe(1);
+    expect(header.description.length).toBe(visibleLengths[0]);
   });
 
   it("splits the leaderboard into several messages beyond 10 embeds", () => {
@@ -703,6 +773,42 @@ describe("punchlines", () => {
     expect(punch({ headshots: 0, bodyshots: 8, legshots: 2 })).toHaveLength(0);
   });
 
+  it("celebrates entry fraggers, quad kills, flat KD and clutch wins", () => {
+    expect(punch({}, { firstBloods: 4 })).toContainEqual(expect.stringContaining("first bloods"));
+    expect(punch({}, { quadKills: 1 })).toContainEqual(expect.stringContaining("4 kills dans le round"));
+    // le 4K s'efface derriere un vrai ace
+    expect(punch({}, { quadKills: 1, aces: 1 }).some((message) => message.includes("4 kills dans le round"))).toBe(false);
+    expect(punch({ didWin: true, teamScore: 13, opponentScore: 11 }))
+      .toContainEqual(expect.stringContaining("espérance de vie"));
+    expect(punch({ kills: 15, deaths: 15 })).toContainEqual(expect.stringContaining("fonctionnaire"));
+
+    // pas de "match arrache" sur une victoire nette, pas de fonctionnaire sous 10 kills
+    expect(punch({ didWin: true, teamScore: 13, opponentScore: 9 })).toHaveLength(0);
+    expect(punch({ kills: 5, deaths: 5 })).toHaveLength(0);
+  });
+
+  it("handles stomps, lone wolves, tourists and endless overtimes", () => {
+    expect(punch({ didWin: true, teamScore: 13, opponentScore: 1 }))
+      .toContainEqual(expect.stringContaining("démonstration"));
+    expect(getPunchlines(createPost({ didWin: true, teamScore: 13, opponentScore: 0 }), () => 1))
+      .toContainEqual(expect.stringContaining("spike"));
+    expect(punch({ didWin: false, teamScore: 1, opponentScore: 13 }))
+      .toContainEqual(expect.stringContaining("vestiaire en silence"));
+    expect(punch({ kills: 18, assists: 0 }))
+      .toContainEqual(expect.stringContaining("ne connaît pas ses coéquipiers"));
+    expect(punch({ kills: 16, deaths: 5 }))
+      .toContainEqual(expect.stringContaining("intouchable"));
+    expect(punch({ kills: 4, deaths: 7, assists: 2, score: 2600 }))
+      .toContainEqual(expect.stringContaining("visite de la carte"));
+    expect(punch({ didWin: true, teamScore: 15, opponentScore: 13 }))
+      .toContainEqual(expect.stringContaining("prolongations"));
+
+    // l'overtime remplace la blague "match arrache" et le marathon
+    const overtime = punch({ didWin: true, teamScore: 15, opponentScore: 13, gameLengthInMs: 50 * 60_000 });
+    expect(overtime.some((message) => message.includes("espérance de vie"))).toBe(false);
+    expect(overtime.some((message) => message.includes("minutes de match"))).toBe(false);
+  });
+
   it("rotates variants but stays deterministic for a given match", () => {
     const post = createPost({}, { aces: 1 });
 
@@ -719,6 +825,23 @@ describe("punchlines", () => {
     const alice = createPost({ didWin: false, playerDisplayName: "Alice" }, { teamChoked: true });
     const bob = createPost({ didWin: false, playerDisplayName: "Bob" }, { teamChoked: true });
     expect(getPunchlines(alice)).toEqual(getPunchlines(bob));
+  });
+});
+
+describe("streak messages", () => {
+  it("escalates the tone with the streak count", () => {
+    expect(getStreakMessage("X", "loss", 3, false, () => 2)).toContain("ressaisis-toi mon grand");
+    expect(getStreakMessage("X", "loss", 4, false, () => 0)).toContain("œuvre caritative");
+    expect(getStreakMessage("X", "loss", 5, true, () => 0)).toContain("5+ défaites d'affilée");
+    expect(getStreakMessage("X", "loss", 5, true, () => 0)).toContain("naufrage");
+    expect(getStreakMessage("X", "win", 3, false, () => 0)).toContain("La machine est lancée");
+    expect(getStreakMessage("X", "win", 3, false, () => 1)).toContain("sentir bon pour lui");
+    expect(getStreakMessage("X", "win", 4, false, () => 1)).toContain("smurf");
+    expect(getStreakMessage("X", "win", 10, true, () => 0)).toContain("10+ victoires d'affilée");
+  });
+
+  it("picks a stable variant without a picker", () => {
+    expect(getStreakMessage("X", "win", 3, false)).toBe(getStreakMessage("X", "win", 3, false));
   });
 });
 
@@ -1022,6 +1145,7 @@ function createHarness(): {
 function createHighlights(overrides: Partial<MatchHighlights> = {}): MatchHighlights {
   return {
     aces: 0,
+    quadKills: 0,
     firstBloods: 2,
     firstDeaths: 1,
     isMostFirstDeathsInMatch: false,
@@ -1061,6 +1185,7 @@ function createMatch(matchId: string, startedAt = "2026-06-19T18:00:00.000Z"): M
     teamScore: 13,
     opponentScore: 9,
     didWin: true,
+    rosterPuuids: [],
     highlights: createHighlights()
   };
 }

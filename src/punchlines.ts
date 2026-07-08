@@ -6,6 +6,21 @@ const SNIPER_HS_PERCENT = 35;
 const LOW_HS_PERCENT = 10;
 const CARRY_RATIO = 1.5;
 const MIN_FIRST_DEATHS_FOR_MAGNET = 3;
+const MIN_FIRST_BLOODS_FOR_ENTRY = 4;
+const MIN_KILLS_FOR_FLAT_KD = 10;
+const CLOSE_WIN_MAX_ROUND_GAP = 2;
+// 13-0 ou 13-1, dans un sens comme dans l'autre.
+const STOMP_MAX_LOSER_SCORE = 1;
+const MIN_KILLS_FOR_LONE_WOLF = 15;
+const MIN_KILLS_FOR_UNTOUCHABLE = 15;
+const MAX_DEATHS_FOR_UNTOUCHABLE = 6;
+// Touriste : quasi aucune participation aux combats sur une game complete.
+const TOURIST_MAX_KILLS = 6;
+const TOURIST_MAX_DEATHS = 8;
+const TOURIST_MAX_ASSISTS = 3;
+const TOURIST_MIN_ROUNDS = 16;
+// 27 rounds et plus = prolongations a rallonge (le minimum en overtime est 14-12, 26 rounds).
+const OVERTIME_MIN_TOTAL_ROUNDS = 27;
 const MIN_LEGSHOTS_FOR_KNEECAPPER = 5;
 const LOW_ADR = 60;
 const GHOST_ACS = 100;
@@ -49,6 +64,12 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
   const firstDeaths = post.highlights.firstDeaths ?? 0;
   const agentLabel = post.agentName ?? "un duelliste";
   const highlights = post.highlights;
+  const scoreLine = post.teamScore !== null && post.opponentScore !== null
+    ? `${post.teamScore}-${post.opponentScore}`
+    : null;
+  const totalRounds = post.teamScore !== null && post.opponentScore !== null
+    ? post.teamScore + post.opponentScore
+    : null;
 
   // Les positives d'abord, les tacles ensuite.
   if (highlights.aces >= 2) {
@@ -66,11 +87,25 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     ]);
   }
 
+  // Un 4K sans ace : on ne le mentionne pas si un ace a deja ete celebre juste au-dessus.
+  if (highlights.aces === 0 && highlights.quadKills >= 1) {
+    pushOne(20, [
+      `💣 4 kills dans le round pour ${name}. L'ace était à une balle près.`
+    ]);
+  }
+
   if (highlights.teamCarryRatio !== null && highlights.teamCarryRatio >= CARRY_RATIO) {
     pushOne(3, [
       `💪 ${name} a joué en 1v9 !`,
       `💪 ${name} a porté quatre valises pendant tout le match.`,
       `💪 ${name} a fait le match de sa vie pendant que les autres faisaient de la figuration.`
+    ]);
+  }
+
+  if (highlights.firstBloods !== null && highlights.firstBloods >= MIN_FIRST_BLOODS_FOR_ENTRY) {
+    pushOne(21, [
+      `⚡ ${highlights.firstBloods} first bloods. ${name} arrive sur le site avant le round.`,
+      `⚡ ${name} dit bonjour en premier, et à balles réelles : ${highlights.firstBloods} first bloods.`
     ]);
   }
 
@@ -87,6 +122,24 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
       `🔄 REMONTADA HISTORIQUE ! Ils étaient morts et enterrés, ils ont retourné le match.`,
       `🔄 Le match était plié. Quelqu'un a oublié de leur dire. REMONTADA.`,
       `🔄 Tout le monde avait abandonné ce match, sauf eux. REMONTADA.`
+    ]);
+  }
+
+  // Prolongations a rallonge d'abord, sinon victoire arrachee (13-11 / overtime court) :
+  // une seule blague sur le score serre. Phrases sans nom, dedupliquees dans les messages groupes.
+  if (totalRounds !== null && totalRounds >= OVERTIME_MIN_TOTAL_ROUNDS) {
+    pushOne(26, [
+      `⏳ ${scoreLine} après prolongations. Ce match a duré plus longtemps que certaines relations.`
+    ]);
+  } else if (
+    post.didWin === true
+    && post.teamScore !== null
+    && post.opponentScore !== null
+    && post.teamScore >= 13
+    && post.teamScore - post.opponentScore <= CLOSE_WIN_MAX_ROUND_GAP
+  ) {
+    pushOne(22, [
+      `🫀 ${post.teamScore}-${post.opponentScore}. Ce match a coûté trois ans d'espérance de vie à tout le monde.`
     ]);
   }
 
@@ -114,11 +167,49 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     ]);
   }
 
+  if (
+    post.kills !== null
+    && post.deaths !== null
+    && post.kills >= MIN_KILLS_FOR_UNTOUCHABLE
+    && post.deaths <= MAX_DEATHS_FOR_UNTOUCHABLE
+  ) {
+    pushOne(24, [
+      `🛡️ ${post.kills} kills pour seulement ${post.deaths} morts. ${name} était intouchable ce soir.`
+    ]);
+  }
+
+  // Ecrasement 13-0 / 13-1 : phrase sans nom, dedupliquee dans les messages groupes.
+  if (
+    post.didWin === true
+    && post.teamScore !== null
+    && post.opponentScore !== null
+    && post.teamScore >= 13
+    && post.opponentScore <= STOMP_MAX_LOSER_SCORE
+  ) {
+    pushOne(25, [
+      `🚂 ${scoreLine}. Ce n'était pas un match, c'était une démonstration.`,
+      `🚂 ${scoreLine}. Même le spike n'a pas eu le temps de chauffer.`
+    ]);
+  }
+
   if (highlights.teamChoked && post.didWin === false) {
     pushOne(9, [
       `🤡 Le plus grand choke de l'histoire. Vous avez réussi à perdre ça..`,
       `🤡 Un choke pareil, ça devrait être sanctionné par Riot.`,
       `🤡 Perdre avec cette avance, c'est presque un exploit.`
+    ]);
+  }
+
+  // Ecrasement subi 0-13 / 1-13 : phrase sans nom, dedupliquee dans les messages groupes.
+  if (
+    post.didWin === false
+    && post.teamScore !== null
+    && post.opponentScore !== null
+    && post.opponentScore >= 13
+    && post.teamScore <= STOMP_MAX_LOSER_SCORE
+  ) {
+    pushOne(27, [
+      `🧱 ${scoreLine}. Les joueurs retournent au vestiaire en silence.`
     ]);
   }
 
@@ -130,11 +221,22 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     ]);
   }
 
-  if (matchMinutes !== null && matchMinutes >= MARATHON_MIN_MINUTES) {
+  // Le marathon s'efface derriere la blague overtime, qui raconte deja un match interminable.
+  if (
+    matchMinutes !== null
+    && matchMinutes >= MARATHON_MIN_MINUTES
+    && (totalRounds === null || totalRounds < OVERTIME_MIN_TOTAL_ROUNDS)
+  ) {
     pushOne(11, [
       `🛋️ ${matchMinutes} minutes de match. À ce stade ils habitent sur le serveur.`,
       `🛋️ Un match de ${matchMinutes} minutes. Facturez les heures sup.`,
       `🛋️ ${matchMinutes} minutes de match. Il y a des CDD plus courts.`
+    ]);
+  }
+
+  if (post.kills !== null && post.deaths !== null && post.kills === post.deaths && post.kills >= MIN_KILLS_FOR_FLAT_KD) {
+    pushOne(23, [
+      `⚖️ KD de 1.00 pile. ${name}, le fonctionnaire du serveur : ni plus, ni moins.`
     ]);
   }
 
@@ -188,6 +290,34 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
     ]);
   }
 
+  if (
+    post.kills !== null
+    && post.assists !== null
+    && post.assists === 0
+    && post.kills >= MIN_KILLS_FOR_LONE_WOLF
+  ) {
+    pushOne(28, [
+      `🐺 ${post.kills} kills, 0 assist. ${name} ne connaît pas ses coéquipiers, et c'est réciproque.`,
+      `🐺 ${name} a fait sa game en silence radio : ${post.kills} kills, aucune assist.`
+    ]);
+  }
+
+  if (
+    post.kills !== null
+    && post.deaths !== null
+    && post.assists !== null
+    && post.roundsPlayed !== null
+    && post.roundsPlayed >= TOURIST_MIN_ROUNDS
+    && post.kills <= TOURIST_MAX_KILLS
+    && post.deaths <= TOURIST_MAX_DEATHS
+    && post.assists <= TOURIST_MAX_ASSISTS
+  ) {
+    pushOne(29, [
+      `🧳 ${name} a soigneusement évité tout contact avec l'ennemi. Belle visite de la carte.`,
+      `🧳 ${name} a pris des screenshots du décor pendant que les autres jouaient.`
+    ]);
+  }
+
   // ACS < 100 et ADR < 60 racontent la meme game : on ne garde que la plus cinglante.
   if (acsRounded !== null && acs! < GHOST_ACS) {
     pushOne(17, [
@@ -204,6 +334,54 @@ export function getPunchlines(post: MatchSummaryPost, pickVariant?: PunchlineVar
   }
 
   return punchlines.slice(0, MAX_PUNCHLINES_PER_PLAYER);
+}
+
+// Message de serie par palier : le ton s'emballe (victoires) ou empire (defaites) avec le compte.
+// La variante est choisie par un hash du contexte : stable pour un meme evenement, variee entre
+// joueurs et entre paliers.
+export function getStreakMessage(
+  displayName: string,
+  kind: "win" | "loss",
+  count: number,
+  isOpenEnded: boolean,
+  pickVariant?: PunchlineVariantPicker
+): string {
+  const name = `**${displayName}**`;
+  const displayCount = isOpenEnded ? `${count}+` : `${count}`;
+
+  const variants = kind === "win"
+    ? count >= 5
+      ? [
+        `👑 ${displayCount} victoires d'affilée ! ${name} est officiellement INARRÊTABLE.`,
+        `👑 ${name} : ${displayCount} wins de suite. Riot enquête, c'est trop propre.`
+      ]
+      : count === 4
+        ? [
+          `🚀 4 victoires d'affilée ! ${name} est en pleine ascension, ne le déconcentrez pas.`,
+          `🚀 ${name} enchaîne 4 wins. Le smurf, c'est lui maintenant.`
+        ]
+        : [
+          `🔥 ${name} enchaîne 3 victoires ! La machine est lancée.`,
+          `🔥 3 de suite pour ${name}. Ça commence à sentir bon pour lui !`
+        ]
+    : count >= 5
+      ? [
+        `☠️ ${displayCount} défaites d'affilée. ${name}, c'est un naufrage.`
+      ]
+      : count === 4
+        ? [
+          `🚑 4 de suite. ${name} confond ranked et œuvre caritative : il distribue du RR.`
+        ]
+        : [
+          `🧯 ${name} enchaîne 3 défaites. Une pause hydratation s'impose.`,
+          `🧯 3 défaites de suite pour ${name}. C'est un début de tendance, pas encore un mode de vie.`,
+          `🧯 3 défaites d'affilée pour ${name}, ressaisis-toi mon grand !`
+        ];
+
+  const index = pickVariant
+    ? Math.min(Math.max(pickVariant(variants.length), 0), variants.length - 1)
+    : hashString(`${displayName}:${kind}:${count}`) % variants.length;
+  return variants[index]!;
 }
 
 // Punchline de groupe : plusieurs joueurs suivis dans les 3 pires scores du lobby.

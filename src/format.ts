@@ -1,4 +1,4 @@
-import { getBottomDuoPunchline, getPunchlines, type PunchlineVariantPicker } from "./punchlines.js";
+import { getBottomDuoPunchline, getPunchlines, getStreakMessage, type PunchlineVariantPicker } from "./punchlines.js";
 import type { DiscordWebhookPayload, LeaderboardEntry, MatchSummaryPost } from "./types.js";
 
 // UUID de l'episode competitif courant sur media.valorant-api.com, couvre les tiers 0 a 27 (Radiant).
@@ -12,25 +12,20 @@ const DEFAULT_EMBED_COLOR = 0x5865f2;
 const EMBED_WIDTH_PAD = "⠀".repeat(56);
 
 export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPayload[] {
-  const headerEmbed = {
+  const buildHeaderEmbed = (description: string) => ({
     author: {
       name: "VALOLO"
     },
     title: "🏆 Leaderboard Quotidien",
-    description: EMBED_WIDTH_PAD,
+    description,
     color: DEFAULT_EMBED_COLOR,
     timestamp: new Date().toISOString()
-  };
+  });
 
   if (entries.length === 0) {
     return [
       {
-        embeds: [
-          {
-            ...headerEmbed,
-            description: `Aucun joueur suivi pour le moment.\n${EMBED_WIDTH_PAD}`
-          }
-        ]
+        embeds: [buildHeaderEmbed("Aucun joueur suivi pour le moment.")]
       }
     ];
   }
@@ -44,6 +39,9 @@ export function formatLeaderboard(entries: LeaderboardEntry[]): DiscordWebhookPa
     ...statLines.map(visibleLength),
     ...sortedEntries.map((entry) => entry.displayName.length + 6)
   );
+
+  // L'en-tete est rempli a la meme largeur que les cartes joueurs pour un rendu uniforme.
+  const headerEmbed = buildHeaderEmbed("⠀".repeat(targetLength + 2));
 
   const playerEmbeds = sortedEntries.map((entry, index) => {
     const iconUrl = rankIconUrl(entry.rankTier);
@@ -225,14 +223,17 @@ export function formatRankChange(
   };
 }
 
-export function formatStreak(displayName: string, kind: "win" | "loss", count: number, isOpenEnded: boolean): DiscordWebhookPayload {
-  const displayCount = isOpenEnded ? `${count}+` : `${count}`;
+export function formatStreak(
+  displayName: string,
+  kind: "win" | "loss",
+  count: number,
+  isOpenEnded: boolean,
+  pickVariant?: PunchlineVariantPicker
+): DiscordWebhookPayload {
   return {
     embeds: [
       {
-        description: kind === "win"
-          ? `🔥 **${displayName}** est en feu : ${displayCount} victoires d'affilée !`
-          : `🧯 **${displayName}** enchaîne ${displayCount} défaites d'affilée. Quelqu'un doit lui retirer le jeu.`,
+        description: getStreakMessage(displayName, kind, count, isOpenEnded, pickVariant),
         color: kind === "win" ? 0x2ecc71 : 0xe74c3c
       }
     ]

@@ -54,6 +54,10 @@ describe("runFeatureSimulation", () => {
     expect(text).toContain("minutes de match");
     expect(text).toContain("pliée en 18 minutes");
     expect(text).toContain("se disputent la dernière place");
+    expect(text).toContain("démonstration");
+    expect(text).toContain("vestiaire en silence");
+    expect(text).toContain("visite de la carte");
+    expect(text).toContain("intouchable");
 
     // Match commun
     expect(text).toContain("Match commun · 3 joueurs suivis");

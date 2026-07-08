@@ -68,6 +68,8 @@ export interface MatchSummary {
   teamScore: number | null;
   opponentScore: number | null;
   didWin: boolean | null;
+  // puuids des 10 joueurs du lobby : permet de reperer d'autres joueurs suivis dans le match.
+  rosterPuuids: string[];
   highlights: MatchHighlights;
 }
 
@@ -75,6 +77,8 @@ export interface MatchSummary {
 // (les 10 joueurs, les rounds et les kill events).
 export interface MatchHighlights {
   aces: number;
+  // rounds a exactement 4 kills (l'ace rate d'une balle)
+  quadKills: number;
   firstBloods: number | null;
   firstDeaths: number | null;
   isMostFirstDeathsInMatch: boolean;

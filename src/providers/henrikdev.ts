@@ -308,6 +308,10 @@ function parseMatchSummary(match: Record<string, unknown>, puuid: string): Match
     teamScore,
     opponentScore,
     didWin,
+    rosterPuuids: players
+      .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
+      .map((entry) => readOptionalString(entry.puuid))
+      .filter((entryPuuid): entryPuuid is string => entryPuuid !== null),
     highlights: computeHighlights(match, players, playerEntry, puuid, teamId, agentName, didWin)
   };
 }
@@ -373,8 +377,11 @@ function computeHighlights(
   const selfScore = self?.score ?? null;
   const scoreSwing = detectScoreSwing(match.rounds, teamId);
 
+  const multiKills = countMultiKills(killEvents, puuid);
+
   return {
-    aces: countAces(killEvents, puuid),
+    aces: multiKills.aces,
+    quadKills: multiKills.quadKills,
     firstBloods,
     firstDeaths,
     isMostFirstDeathsInMatch: firstDeaths !== null && firstDeaths > 0
@@ -459,9 +466,9 @@ function getFirstEngagementsByRound(
   return result;
 }
 
-function countAces(killEvents: KillEvent[] | null, puuid: string): number {
+function countMultiKills(killEvents: KillEvent[] | null, puuid: string): { aces: number; quadKills: number } {
   if (killEvents === null) {
-    return 0;
+    return { aces: 0, quadKills: 0 };
   }
 
   const killsByRound = new Map<number, number>();
@@ -472,13 +479,16 @@ function countAces(killEvents: KillEvent[] | null, puuid: string): number {
   }
 
   let aces = 0;
+  let quadKills = 0;
   for (const kills of killsByRound.values()) {
     if (kills >= 5) {
       aces += 1;
+    } else if (kills === 4) {
+      quadKills += 1;
     }
   }
 
-  return aces;
+  return { aces, quadKills };
 }
 
 // "Big lead" : au moins 9 rounds gagnes avec 6 rounds d'avance (ex. 11-2). Mene avec un tel
