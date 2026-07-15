@@ -106,7 +106,7 @@ function buildAwards(players: PlayerWeeklyStats[]): string[] {
 
   const mvp = pickBest(players.filter((player) => player.rrNet !== null && player.rrNet > 0), (player) => player.rrNet!);
   if (mvp) {
-    awards.push(`🏆 **MVP de la semaine** : ${mvp.displayName} (+${mvp.rrNet} RR)`);
+    awards.push(`🏆 **MVP de la semaine** : ${mvp.displayName} avec +${mvp.rrNet} RR. Le travail paie, parfois.`);
   }
 
   const boulet = pickBest(players.filter((player) => player.rrNet !== null && player.rrNet < 0), (player) => -player.rrNet!);
@@ -119,7 +119,7 @@ function buildAwards(players: PlayerWeeklyStats[]): string[] {
     (player) => player.headshots / player.totalHits
   );
   if (sniper) {
-    awards.push(`🎯 **Le Sniper** : ${sniper.displayName} (${Math.round((sniper.headshots / sniper.totalHits) * 100)}% HS)`);
+    awards.push(`🎯 **Le Sniper** : ${sniper.displayName} avec ${Math.round((sniper.headshots / sniper.totalHits) * 100)}% HS. Les casques adverses n'ont servi à rien.`);
   }
 
   const ghost = pickBest(
@@ -127,12 +127,12 @@ function buildAwards(players: PlayerWeeklyStats[]): string[] {
     (player) => -averageOf(player.acsValues)
   );
   if (ghost && players.length > 1) {
-    awards.push(`👻 **Le Fantôme** : ${ghost.displayName} (${Math.round(averageOf(ghost.acsValues))} ACS de moyenne)`);
+    awards.push(`👻 **Le Fantôme** : ${ghost.displayName} avec ${Math.round(averageOf(ghost.acsValues))} ACS. Une discrétion presque professionnelle.`);
   }
 
   const noLife = pickBest(players, (player) => player.games);
   if (noLife && noLife.games >= 5) {
-    awards.push(`☕ **Le No-Life** : ${noLife.displayName} (${noLife.games} games)`);
+    awards.push(`☕ **Le No-Life** : ${noLife.displayName}. À ${noLife.games} parties, ce n'est plus un jeu mais un emploi.`);
   }
 
   if (awards.length === 0) {
